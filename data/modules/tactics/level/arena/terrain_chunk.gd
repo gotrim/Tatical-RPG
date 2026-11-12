@@ -22,10 +22,11 @@ func configure(
 	mesh_instance.mesh = render_mesh
 	add_child(mesh_instance)
 
-	var collision := CollisionShape3D.new()
-	collision.name = "Collision"
-	collision.shape = collision_mesh.create_trimesh_shape()
-	add_child(collision)
+	if collision_mesh.get_surface_count() > 0:
+		var collision := CollisionShape3D.new()
+		collision.name = "Collision"
+		collision.shape = collision_mesh.create_trimesh_shape()
+		add_child(collision)
 
 
 func resolve_tile_hit(world_position: Vector3) -> TacticsTile:

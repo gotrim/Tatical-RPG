@@ -38,7 +38,7 @@ const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
 @export_range(0.25, 2.0, 0.25) var shallow_water_depth: float = 0.5
 @export_range(0.5, 3.0, 0.25) var medium_water_depth: float = 1.0
 @export_range(0.75, 4.0, 0.25) var deep_water_depth: float = 1.5
-@export_range(0.0, 0.5, 0.01) var submerge_per_depth_unit: float = 0.45
+@export_range(0.0, 1.0, 0.01) var submerge_per_depth_unit: float = 1.0
 @export_range(0.0, 0.75, 0.01) var maximum_submerge: float = 0.75
 @export_range(0.1, 0.9, 0.05) var water_opacity: float = 0.65
 @export var ocean_floor_color: Color = Color(0.25, 0.31, 0.30)
@@ -564,10 +564,9 @@ func _build_chunk_meshes(
 					render_tools, Biome.OCEAN
 				)
 				_add_chunk_top(ocean_tool, top, uv)
-				_add_chunk_top(collision_tool, top, uv)
 				_add_ocean_floor_sides(
 					x, z, local_x, local_z, floor_height,
-					block_types, water_depths, render_tools, collision_tool
+					block_types, water_depths, render_tools
 				)
 
 				if water_tool == null:
@@ -718,10 +717,11 @@ func _add_terrain_sides(
 			surface, top[start], top[end], bottom_end, bottom_start,
 			edge_normals[side], side_uvs
 		)
-		_add_chunk_quad(
-			collision_tool, top[start], top[end], bottom_end, bottom_start,
-			edge_normals[side], side_uvs
-		)
+		if neighbor_type != BLOCK_WATER:
+			_add_chunk_quad(
+				collision_tool, top[start], top[end], bottom_end, bottom_start,
+				edge_normals[side], side_uvs
+			)
 
 
 func _add_ocean_floor_sides(
@@ -732,8 +732,7 @@ func _add_ocean_floor_sides(
 	floor_height: float,
 	block_types: PackedByteArray,
 	water_depths: PackedFloat32Array,
-	render_tools: Dictionary,
-	collision_tool: SurfaceTool
+	render_tools: Dictionary
 ) -> void:
 	var directions: Array[Vector2i] = [
 		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT
@@ -773,10 +772,6 @@ func _add_ocean_floor_sides(
 		]
 		_add_chunk_quad(
 			surface, top[start], top[end], bottom_end, bottom_start,
-			edge_normals[side], side_uvs
-		)
-		_add_chunk_quad(
-			collision_tool, top[start], top[end], bottom_end, bottom_start,
 			edge_normals[side], side_uvs
 		)
 

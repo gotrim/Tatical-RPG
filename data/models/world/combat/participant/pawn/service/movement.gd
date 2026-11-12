@@ -115,6 +115,7 @@ func _update_water_state(pawn: TacticsPawn) -> TacticsTile:
 	pawn.res.is_swimming = (
 		current_tile != null
 		and float(current_tile.get_meta("water_depth", 0.0)) > 0.0
+		and pawn.global_position.y < current_tile.global_position.y
 	)
 	return current_tile
 
