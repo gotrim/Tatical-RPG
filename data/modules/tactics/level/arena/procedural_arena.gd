@@ -38,6 +38,8 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 
 @export_group("Rampas")
 @export_range(0.25, 2.0, 0.25) var ramp_max_height_difference: float = 0.75
+@export_range(2, 8, 1) var ramp_max_length_tiles: int = 4
+@export_range(0.25, 2.0, 0.25) var ramp_min_total_rise: float = 0.5
 
 var _continentality_noise: FastNoiseLite = FastNoiseLite.new()
 var _erosion_noise: FastNoiseLite = FastNoiseLite.new()
@@ -49,6 +51,9 @@ var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
 var _ramp_meshes: Dictionary = {}
+var _ramp_directions: Array[Vector2i] = []
+var _ramp_start_heights: PackedFloat32Array = PackedFloat32Array()
+var _ramp_rises: PackedFloat32Array = PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -92,21 +97,22 @@ func _generate_tiles() -> void:
 			biomes[index] = int(column.y)
 			water_depths[index] = column.z
 
+	_build_ramp_runs(heights, biomes)
+
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
 			var height: float = heights[index]
 			var biome: int = biomes[index]
-			var ramp_direction: Vector2i = _get_ramp_direction(x, z, heights, biomes)
-			var ramp_height: float = 0.0
-			if ramp_direction != Vector2i.ZERO:
-				var higher_x: int = x + ramp_direction.x
-				var higher_z: int = z + ramp_direction.y
-				ramp_height = heights[_height_index(higher_x, higher_z)] - height
+			var ramp_direction: Vector2i = _ramp_directions[index]
+			var ramp_height: float = _ramp_rises[index]
+			var ramp_start_height: float = (
+				_ramp_start_heights[index] if ramp_direction != Vector2i.ZERO else height
+			)
 			_create_tile(
 				first_x + x,
 				first_z + z,
-				height,
+				ramp_start_height,
 				biome,
 				water_depths[index],
 				ramp_direction,
@@ -114,7 +120,129 @@ func _generate_tiles() -> void:
 			)
 
 
-func _get_ramp_direction(
+func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedInt32Array) -> void:
+	var tile_count: int = GRID_WIDTH * GRID_DEPTH
+	_ramp_directions.resize(tile_count)
+	_ramp_start_heights = heights.duplicate()
+	_ramp_rises.resize(tile_count)
+	_ramp_rises.fill(0.0)
+	for index in range(tile_count):
+		_ramp_directions[index] = Vector2i.ZERO
+
+	var directions: Array[Vector2i] = [
+		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
+	]
+
+	for x in range(GRID_WIDTH):
+		for z in range(GRID_DEPTH):
+			var start_index: int = _height_index(x, z)
+			if (
+				biomes[start_index] == Biome.OCEAN
+				or _ramp_directions[start_index] != Vector2i.ZERO
+			):
+				continue
+			var best_direction: Vector2i = Vector2i.ZERO
+			var best_length: int = 0
+			var best_rise: float = 0.0
+
+			for direction: Vector2i in directions:
+				for length in range(ramp_max_length_tiles, 1, -1):
+					var total_rise: float = _get_ramp_run_rise(
+						x, z, direction, length, heights, biomes
+					)
+					if total_rise < 0.0:
+						continue
+					if length > best_length or (length == best_length and total_rise > best_rise):
+						best_direction = direction
+						best_length = length
+						best_rise = total_rise
+
+			if best_length > 0:
+				_assign_ramp_run(
+					x, z, best_direction, best_length, best_rise
+				)
+
+	for x in range(GRID_WIDTH):
+		for z in range(GRID_DEPTH):
+			var index: int = _height_index(x, z)
+			if _ramp_directions[index] != Vector2i.ZERO or biomes[index] == Biome.OCEAN:
+				continue
+			var direction: Vector2i = _get_single_ramp_direction(x, z, heights, biomes)
+			if direction == Vector2i.ZERO:
+				continue
+			var neighbor_index: int = _height_index(x + direction.x, z + direction.y)
+			_ramp_directions[index] = direction
+			_ramp_start_heights[index] = heights[index]
+			_ramp_rises[index] = heights[neighbor_index] - heights[index]
+
+
+func _get_ramp_run_rise(
+	start_x: int,
+	start_z: int,
+	direction: Vector2i,
+	length: int,
+	heights: PackedFloat32Array,
+	biomes: PackedInt32Array
+) -> float:
+	var end_x: int = start_x + direction.x * length
+	var end_z: int = start_z + direction.y * length
+	if end_x < 0 or end_x >= GRID_WIDTH or end_z < 0 or end_z >= GRID_DEPTH:
+		return -1.0
+
+	var start_index: int = _height_index(start_x, start_z)
+	var end_index: int = _height_index(end_x, end_z)
+	if (
+		biomes[end_index] == Biome.OCEAN
+		or _ramp_directions[end_index] != Vector2i.ZERO
+	):
+		return -1.0
+	var start_height: float = heights[start_index]
+	var end_height: float = heights[end_index]
+	var total_rise: float = end_height - start_height
+	var segment_rise: float = total_rise / float(length)
+	if total_rise < ramp_min_total_rise or segment_rise > ramp_max_height_difference:
+		return -1.0
+
+	var previous_height: float = start_height
+	for step in range(1, length):
+		var tile_x: int = start_x + direction.x * step
+		var tile_z: int = start_z + direction.y * step
+		var index: int = _height_index(tile_x, tile_z)
+		if biomes[index] == Biome.OCEAN or _ramp_directions[index] != Vector2i.ZERO:
+			return -1.0
+
+		var sample_height: float = heights[index]
+		var expected_height: float = start_height + segment_rise * float(step)
+		if sample_height < previous_height:
+			return -1.0
+		if absf(sample_height - expected_height) > ramp_max_height_difference:
+			return -1.0
+		previous_height = sample_height
+
+	if end_height < previous_height:
+		return -1.0
+	return total_rise
+
+
+func _assign_ramp_run(
+	start_x: int,
+	start_z: int,
+	direction: Vector2i,
+	length: int,
+	total_rise: float
+) -> void:
+	var start_height: float = _ramp_start_heights[_height_index(start_x, start_z)]
+	var segment_rise: float = total_rise / float(length)
+	for step in range(length):
+		var x: int = start_x + direction.x * step
+		var z: int = start_z + direction.y * step
+		var index: int = _height_index(x, z)
+		_ramp_directions[index] = direction
+		_ramp_start_heights[index] = start_height + segment_rise * float(step)
+		_ramp_rises[index] = segment_rise
+
+
+func _get_single_ramp_direction(
 	x: int, z: int, heights: PackedFloat32Array, biomes: PackedInt32Array
 ) -> Vector2i:
 	var directions: Array[Vector2i] = [
@@ -122,10 +250,7 @@ func _get_ramp_direction(
 	]
 	var best_direction: Vector2i = Vector2i.ZERO
 	var best_rise: float = 0.0
-	var current_height: float = heights[_height_index(x, z)]
-	if biomes[_height_index(x, z)] == Biome.OCEAN:
-		return best_direction
-
+	var current_index: int = _height_index(x, z)
 	for direction: Vector2i in directions:
 		var neighbor_x: int = x + direction.x
 		var neighbor_z: int = z + direction.y
@@ -133,17 +258,15 @@ func _get_ramp_direction(
 			continue
 		if neighbor_z < 0 or neighbor_z >= GRID_DEPTH:
 			continue
-		if biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN:
+		var neighbor_index: int = _height_index(neighbor_x, neighbor_z)
+		if biomes[neighbor_index] == Biome.OCEAN:
 			continue
-		var rise: float = heights[_height_index(neighbor_x, neighbor_z)] - current_height
-		if (
-			rise >= HEIGHT_INTERVAL
-			and rise <= ramp_max_height_difference
-			and rise > best_rise
-		):
-			best_rise = rise
+		if _ramp_directions[neighbor_index] != Vector2i.ZERO:
+			continue
+		var rise: float = heights[neighbor_index] - heights[current_index]
+		if rise >= HEIGHT_INTERVAL and rise <= ramp_max_height_difference and rise > best_rise:
 			best_direction = direction
-
+			best_rise = rise
 	return best_direction
 
 
@@ -303,7 +426,7 @@ func _create_tile(
 
 
 func _get_ramp_mesh(direction: Vector2i, rise: float) -> ArrayMesh:
-	var rise_band: int = roundi(rise / HEIGHT_INTERVAL)
+	var rise_band: int = roundi(rise * 10000.0)
 	var cache_key: String = "%d_%d_%d" % [direction.x, direction.y, rise_band]
 	if _ramp_meshes.has(cache_key):
 		return _ramp_meshes[cache_key]
