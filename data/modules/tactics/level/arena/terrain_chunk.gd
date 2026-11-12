@@ -10,7 +10,8 @@ func configure(
 	render_mesh: ArrayMesh,
 	collision_mesh: ArrayMesh,
 	owner_arena: TacticsArena,
-	grass_multimesh: MultiMesh
+	grass_multimeshes: Array[MultiMesh],
+	grass_material: Material
 ) -> void:
 	name = chunk_name
 	position = chunk_position
@@ -23,10 +24,11 @@ func configure(
 	mesh_instance.mesh = render_mesh
 	add_child(mesh_instance)
 
-	if grass_multimesh:
+	for index: int in range(grass_multimeshes.size()):
 		var grass_instance := MultiMeshInstance3D.new()
-		grass_instance.name = "Grass"
-		grass_instance.multimesh = grass_multimesh
+		grass_instance.name = "Grass_%d" % index
+		grass_instance.multimesh = grass_multimeshes[index]
+		grass_instance.material_override = grass_material
 		grass_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		add_child(grass_instance)
 

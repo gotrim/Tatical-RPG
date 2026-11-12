@@ -18,6 +18,8 @@ var curr_frame: int = 0
 ## @param stats: The Stats resource containing pawn data
 ## @param expertise: The pawn's expertise (class or type)
 func setup(stats: Stats, expertise: String) -> void:
+	alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+	render_priority = 0
 	var playback: AnimationNodeStateMachinePlayback = animation_tree["parameters/playback"]
 	if playback is AnimationNodeStateMachinePlayback:
 		animator = playback

@@ -13,8 +13,14 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
 	"res://data/modules/tactics/level/arena/terrain_chunk_manager.gd"
 )
-const GRASS_SHADER = preload(
-	"res://data/modules/tactics/level/arena/grass.gdshader"
+const GRASS_PLANE_MESH: Mesh = preload(
+	"res://data/models/world/Assets/Meshes/grass_plane_mesh.res"
+)
+const GRASS_TALL_MESH: Mesh = preload(
+	"res://data/models/world/Assets/Meshes/grassTall_plane_mesh.res"
+)
+const GRASS_TEXTURE: Texture2D = preload(
+	"res://data/models/world/Assets/Textures/grass_thin.png"
 )
 
 @export_group("Geração de terreno")
@@ -58,9 +64,7 @@ var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
 var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
-var _grass_material: ShaderMaterial
-var _grass_mesh: QuadMesh
-var _grass_texture: ImageTexture
+var _grass_material: StandardMaterial3D
 var _terrain_meshes: Dictionary = {}
 var _terrain_chunk_manager: Node3D
 var _ramp_directions: Array[Vector2i] = []
@@ -97,19 +101,19 @@ func _clear_terrain_chunks() -> void:
 
 
 func _generate_tiles() -> void:
-	var first_x: int = -int(GRID_WIDTH / 2)
-	var first_z: int = -int(GRID_DEPTH / 2)
-	var heights := PackedFloat32Array()
-	var biomes := PackedByteArray()
-	var block_types := PackedByteArray()
-	var water_depths := PackedFloat32Array()
+	var first_x: int = -floori(float(GRID_WIDTH) / 2.0)
+	var first_z: int = -floori(float(GRID_DEPTH) / 2.0)
+	var heights: PackedFloat32Array = PackedFloat32Array()
+	var biomes: PackedByteArray = PackedByteArray()
+	var block_types: PackedByteArray = PackedByteArray()
+	var water_depths: PackedFloat32Array = PackedFloat32Array()
 	heights.resize(GRID_WIDTH * GRID_DEPTH)
 	biomes.resize(GRID_WIDTH * GRID_DEPTH)
 	block_types.resize(GRID_WIDTH * GRID_DEPTH)
 	water_depths.resize(GRID_WIDTH * GRID_DEPTH)
 
-	for x in range(GRID_WIDTH):
-		for z in range(GRID_DEPTH):
+	for x: int in range(GRID_WIDTH):
+		for z: int in range(GRID_DEPTH):
 			var grid_x: int = first_x + x
 			var grid_z: int = first_z + z
 			var column: Vector3 = _get_column(grid_x, grid_z)
@@ -125,18 +129,18 @@ func _generate_tiles() -> void:
 	_build_ramp_runs(heights, biomes)
 
 	var terrain_heights: PackedFloat32Array = heights.duplicate()
-	for index in range(terrain_heights.size()):
+	for index: int in range(terrain_heights.size()):
 		if _ramp_directions[index] != Vector2i.ZERO:
 			terrain_heights[index] = (
 				_ramp_start_heights[index] + _ramp_rises[index] / 2.0
 			)
 
-	for x in range(GRID_WIDTH):
-		for z in range(GRID_DEPTH):
+	for x: int in range(GRID_WIDTH):
+		for z: int in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
 			var biome: int = biomes[index]
 			var height: float = heights[index]
-			var corner_heights := PackedFloat32Array()
+			var corner_heights: PackedFloat32Array = PackedFloat32Array()
 			if biome != Biome.OCEAN:
 				corner_heights = _get_tile_corner_heights(
 					x, z, terrain_heights, biomes
@@ -161,8 +165,8 @@ func _flatten_ocean_shores(
 		Vector2i(-1, 0), Vector2i(1, 0),
 		Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)
 	]
-	for x in range(GRID_WIDTH):
-		for z in range(GRID_DEPTH):
+	for x: int in range(GRID_WIDTH):
+		for z: int in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
 			if biomes[index] == Biome.OCEAN:
 				continue
@@ -228,15 +232,15 @@ func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedByteArray) -> v
 	_ramp_start_heights = heights.duplicate()
 	_ramp_rises.resize(tile_count)
 	_ramp_rises.fill(0.0)
-	for index in range(tile_count):
+	for index: int in range(tile_count):
 		_ramp_directions[index] = Vector2i.ZERO
 
 	var directions: Array[Vector2i] = [
 		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
 	]
 
-	for x in range(GRID_WIDTH):
-		for z in range(GRID_DEPTH):
+	for x: int in range(GRID_WIDTH):
+		for z: int in range(GRID_DEPTH):
 			var start_index: int = _height_index(x, z)
 			if (
 				biomes[start_index] == Biome.OCEAN
@@ -248,7 +252,7 @@ func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedByteArray) -> v
 			var best_rise: float = 0.0
 
 			for direction: Vector2i in directions:
-				for length in range(ramp_max_length_tiles, 1, -1):
+				for length: int in range(ramp_max_length_tiles, 1, -1):
 					var total_rise: float = _get_ramp_run_rise(
 						x, z, direction, length, heights, biomes
 					)
@@ -264,8 +268,8 @@ func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedByteArray) -> v
 					x, z, best_direction, best_length, best_rise
 				)
 
-	for x in range(GRID_WIDTH):
-		for z in range(GRID_DEPTH):
+	for x: int in range(GRID_WIDTH):
+		for z: int in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
 			if _ramp_directions[index] != Vector2i.ZERO or biomes[index] == Biome.OCEAN:
 				continue
@@ -306,7 +310,7 @@ func _get_ramp_run_rise(
 		return -1.0
 
 	var previous_height: float = start_height
-	for step in range(1, length):
+	for step: int in range(1, length):
 		var tile_x: int = start_x + direction.x * step
 		var tile_z: int = start_z + direction.y * step
 		var index: int = _height_index(tile_x, tile_z)
@@ -532,7 +536,8 @@ func _build_terrain_chunks(
 				meshes.render,
 				meshes.collision,
 				self,
-				meshes.grass
+				meshes.grass,
+				_get_grass_material()
 			)
 
 
@@ -545,8 +550,10 @@ func _build_chunk_meshes(
 	water_depths: PackedFloat32Array
 ) -> Dictionary:
 	var render_tools: Dictionary = {}
-	var grass_transforms: Array[Transform3D] = []
-	var grass_colors: Array[Color] = []
+	var plane_grass_transforms: Array[Transform3D] = []
+	var plane_grass_colors: Array[Color] = []
+	var tall_grass_transforms: Array[Transform3D] = []
+	var tall_grass_colors: Array[Color] = []
 	var water_tool: SurfaceTool
 	var collision_tool := SurfaceTool.new()
 	collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -614,15 +621,25 @@ func _build_chunk_meshes(
 			)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
-			var grass_basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
-				Vector3(
-					rng.randf_range(0.85, 1.15),
-					rng.randf_range(0.85, 1.15),
-					1.0
-				)
+			var grass_tint: Color = _get_grass_color(biomes[index])
+			var use_tall_grass: bool = rng.randf() < 0.25
+			var base_angle: float = rng.randf_range(0.0, TAU)
+			var grass_scale := Vector3(
+				rng.randf_range(0.9, 1.2),
+				rng.randf_range(1.2, 1.8),
+				1.0
 			)
-			grass_transforms.append(Transform3D(grass_basis, grass_position))
-			grass_colors.append(_get_grass_color(biomes[index]))
+			for crossing: int in range(2):
+				var grass_basis := Basis(
+					Vector3.UP, base_angle + float(crossing) * PI / 2.0
+				).scaled(grass_scale)
+				var grass_transform := Transform3D(grass_basis, grass_position)
+				if use_tall_grass:
+					tall_grass_transforms.append(grass_transform)
+					tall_grass_colors.append(grass_tint)
+				else:
+					plane_grass_transforms.append(grass_transform)
+					plane_grass_colors.append(grass_tint)
 
 	var render_mesh := ArrayMesh.new()
 	for biome_id: int in render_tools:
@@ -631,71 +648,53 @@ func _build_chunk_meshes(
 		)
 	if water_tool:
 		_append_surface_tool(render_mesh, water_tool, _get_water_material())
-	var grass_multimesh: MultiMesh = _build_grass_multimesh(
-		grass_transforms, grass_colors
-	)
+	var grass_multimeshes: Array[MultiMesh] = []
+	if not plane_grass_transforms.is_empty():
+		grass_multimeshes.append(
+			_build_grass_multimesh(
+				GRASS_PLANE_MESH, plane_grass_transforms, plane_grass_colors
+			)
+		)
+	if not tall_grass_transforms.is_empty():
+		grass_multimeshes.append(
+			_build_grass_multimesh(
+				GRASS_TALL_MESH, tall_grass_transforms, tall_grass_colors
+			)
+		)
 	return {
 		"render": render_mesh,
 		"collision": collision_tool.commit(),
-		"grass": grass_multimesh
+		"grass": grass_multimeshes
 	}
 
 
 func _build_grass_multimesh(
-	transforms: Array[Transform3D], colors: Array[Color]
+	mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color]
 ) -> MultiMesh:
 	if transforms.is_empty():
 		return null
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_custom_data = true
-	multimesh.mesh = _get_grass_mesh()
+	multimesh.use_colors = true
+	multimesh.mesh = mesh
 	multimesh.instance_count = transforms.size()
 	for index in range(transforms.size()):
 		multimesh.set_instance_transform(index, transforms[index])
-		multimesh.set_instance_custom_data(index, colors[index])
+		multimesh.set_instance_color(index, colors[index])
 	return multimesh
 
 
-func _get_grass_mesh() -> QuadMesh:
-	if _grass_mesh:
-		return _grass_mesh
-	_grass_mesh = QuadMesh.new()
-	_grass_mesh.size = Vector2(0.58, 0.75)
-	_grass_mesh.material = _get_grass_material()
-	return _grass_mesh
-
-
-func _get_grass_material() -> ShaderMaterial:
+func _get_grass_material() -> StandardMaterial3D:
 	if _grass_material:
 		return _grass_material
-	_grass_material = ShaderMaterial.new()
-	_grass_material.shader = GRASS_SHADER
-	_grass_material.set_shader_parameter("grass_texture", _get_grass_texture())
+	_grass_material = StandardMaterial3D.new()
+	_grass_material.albedo_texture = GRASS_TEXTURE
+	_grass_material.vertex_color_use_as_albedo = true
+	_grass_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	_grass_material.alpha_scissor_threshold = 0.5
+	_grass_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_grass_material.roughness = 1.0
 	return _grass_material
-
-
-func _get_grass_texture() -> ImageTexture:
-	if _grass_texture:
-		return _grass_texture
-	var image := Image.create(8, 8, false, Image.FORMAT_RGBA8)
-	image.fill(Color.TRANSPARENT)
-	var rows: Array[String] = [
-		"..#.....",
-		"..##...#",
-		".###..##",
-		".##.####",
-		"##..####",
-		"##.#####",
-		"#.######",
-		".######."
-	]
-	for y in range(rows.size()):
-		for x in range(rows[y].length()):
-			if rows[y].substr(x, 1) == "#":
-				image.set_pixel(x, y, Color.WHITE)
-	_grass_texture = ImageTexture.create_from_image(image)
-	return _grass_texture
 
 
 func _get_grass_color(biome: int) -> Color:
@@ -1050,5 +1049,6 @@ func _get_water_material() -> StandardMaterial3D:
 		ocean_color.r, ocean_color.g, ocean_color.b, water_opacity
 	)
 	_water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	_water_material.render_priority = -1
 	_water_material.roughness = 0.2
 	return _water_material
