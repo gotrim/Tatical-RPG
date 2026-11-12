@@ -200,8 +200,6 @@ func _get_ramp_mesh(direction: Vector2i, rise: float) -> ArrayMesh:
 	).normalized()
 	_add_ramp_triangle(surface, top[0], top[3], top[1], ramp_normal)
 	_add_ramp_triangle(surface, top[1], top[3], top[2], ramp_normal)
-	_add_ramp_triangle(surface, bottom[0], bottom[1], bottom[3], Vector3.DOWN)
-	_add_ramp_triangle(surface, bottom[1], bottom[2], bottom[3], Vector3.DOWN)
 	_add_ramp_quad(surface, top[0], top[1], bottom[1], bottom[0], Vector3.FORWARD)
 	_add_ramp_quad(surface, top[1], top[2], bottom[2], bottom[1], Vector3.RIGHT)
 	_add_ramp_quad(surface, top[2], top[3], bottom[3], bottom[2], Vector3.BACK)
@@ -230,7 +228,8 @@ func _add_ramp_triangle(
 	c: Vector3,
 	outward: Vector3
 ) -> void:
-	if (b - a).cross(c - a).dot(outward) < 0.0:
+	# Godot trata a face frontal com winding horário; as normais continuam apontando para fora.
+	if (b - a).cross(c - a).dot(outward) > 0.0:
 		var swap: Vector3 = b
 		b = c
 		c = swap
@@ -247,7 +246,6 @@ func _get_material(height: float) -> StandardMaterial3D:
 
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.670588, 0.839216, 0.784314, 1.0)
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.metallic_specular = 0.0
 	material.roughness = 0.0
 	_materials[height_band] = material
