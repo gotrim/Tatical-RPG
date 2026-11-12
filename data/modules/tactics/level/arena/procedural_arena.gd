@@ -31,8 +31,8 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 @export_range(0.25, 2.0, 0.25) var shallow_water_depth: float = 0.5
 @export_range(0.5, 3.0, 0.25) var medium_water_depth: float = 1.0
 @export_range(0.75, 4.0, 0.25) var deep_water_depth: float = 1.5
-@export_range(0.0, 0.5, 0.01) var submerge_per_depth_unit: float = 0.15
-@export_range(0.0, 0.75, 0.01) var maximum_submerge: float = 0.3
+@export_range(0.0, 0.5, 0.01) var submerge_per_depth_unit: float = 0.45
+@export_range(0.0, 0.75, 0.01) var maximum_submerge: float = 0.75
 @export_range(0.1, 0.9, 0.05) var water_opacity: float = 0.65
 @export var ocean_floor_color: Color = Color(0.25, 0.31, 0.30)
 
