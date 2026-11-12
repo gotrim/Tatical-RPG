@@ -95,6 +95,7 @@ mouse_default_cursor_shape = 2
 text = "Depurar: encerrar turno"
 
 [node name="CameraLockButton" type="Button" parent="."]
+layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
@@ -103,6 +104,7 @@ offset_top = 16.0
 offset_right = -16.0
 offset_bottom = 56.0
 grow_horizontal = 0
+mouse_filter = 0
 text = "Travar câmera"
 toggle_mode = true
 
