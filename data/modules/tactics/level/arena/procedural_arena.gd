@@ -951,6 +951,6 @@ func _get_water_material() -> StandardMaterial3D:
 	_water_material.albedo_color = Color(
 		ocean_color.r, ocean_color.g, ocean_color.b, water_opacity
 	)
-	_water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 	_water_material.roughness = 0.2
 	return _water_material
