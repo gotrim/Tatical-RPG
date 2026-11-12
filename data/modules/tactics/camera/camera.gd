@@ -60,8 +60,8 @@ func set_camera_travada(value: bool) -> void:
 
 func _clear_camera_input() -> void:
 	InputCaptureResource.cam_direction = Vector2.ZERO
-	InputCaptureResource.twist_input = 0.0
-	InputCaptureResource.pitch_input = 0.0
+	TacticsCameraResource.twist_input = 0.0
+	TacticsCameraResource.pitch_input = 0.0
 	InputCaptureResource.free_look_pressed = false
 	InputCaptureResource.left_stick_x = 0.0
 	InputCaptureResource.left_stick_y = 0.0
