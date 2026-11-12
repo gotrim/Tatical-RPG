@@ -45,6 +45,17 @@ func _physics_process(delta: float) -> void:
 	serv.physics_process(delta, self)
 
 func _input(event: InputEvent) -> void:
+	if (
+		event is InputEventKey
+		and event.pressed
+		and not event.echo
+		and event.keycode == KEY_P
+		and camera_lock_button.visible
+	):
+		_on_camera_lock_button_pressed()
+		get_viewport().set_input_as_handled()
+		return
+
 	var camera: TacticsCamera = _get_tactics_camera()
 	if camera and camera.camera_travada:
 		if (
@@ -94,7 +105,9 @@ func _set_camera_travada(value: bool) -> void:
 
 
 func _update_camera_lock_button(locked: bool) -> void:
-	camera_lock_button.text = "Destravar câmera (Esc)" if locked else "Travar câmera"
+	camera_lock_button.text = (
+		"Destravar câmera (P/Esc)" if locked else "Travar câmera (P)"
+	)
 
 
 func _get_tactics_camera() -> TacticsCamera:
