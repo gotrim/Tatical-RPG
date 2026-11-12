@@ -9,11 +9,13 @@ func add_chunk(
 	chunk_position: Vector3,
 	render_mesh: ArrayMesh,
 	collision_mesh: ArrayMesh,
-	arena: TacticsArena
+	arena: TacticsArena,
+	grass_multimesh: MultiMesh
 ) -> void:
 	var chunk := TacticsTerrainChunk.new()
 	chunk.configure(
-		chunk_name, chunk_position, render_mesh, collision_mesh, arena
+		chunk_name, chunk_position, render_mesh, collision_mesh, arena,
+		grass_multimesh
 	)
 	add_child(chunk)
 	chunks.append(chunk)

@@ -9,7 +9,8 @@ func configure(
 	chunk_position: Vector3,
 	render_mesh: ArrayMesh,
 	collision_mesh: ArrayMesh,
-	owner_arena: TacticsArena
+	owner_arena: TacticsArena,
+	grass_multimesh: MultiMesh
 ) -> void:
 	name = chunk_name
 	position = chunk_position
@@ -21,6 +22,13 @@ func configure(
 	mesh_instance.name = "Mesh"
 	mesh_instance.mesh = render_mesh
 	add_child(mesh_instance)
+
+	if grass_multimesh:
+		var grass_instance := MultiMeshInstance3D.new()
+		grass_instance.name = "Grass"
+		grass_instance.multimesh = grass_multimesh
+		grass_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(grass_instance)
 
 	if collision_mesh.get_surface_count() > 0:
 		var collision := CollisionShape3D.new()

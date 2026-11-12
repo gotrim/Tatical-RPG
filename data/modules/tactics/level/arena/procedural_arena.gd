@@ -13,6 +13,9 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
 	"res://data/modules/tactics/level/arena/terrain_chunk_manager.gd"
 )
+const GRASS_SHADER = preload(
+	"res://data/modules/tactics/level/arena/grass.gdshader"
+)
 
 @export_group("Geração de terreno")
 @export var world_seed: int = 42
@@ -55,6 +58,9 @@ var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
 var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
+var _grass_material: ShaderMaterial
+var _grass_mesh: QuadMesh
+var _grass_texture: ImageTexture
 var _terrain_meshes: Dictionary = {}
 var _terrain_chunk_manager: Node3D
 var _ramp_directions: Array[Vector2i] = []
@@ -525,7 +531,8 @@ func _build_terrain_chunks(
 				Vector3(first_x + start_x, 0.0, first_z + start_z),
 				meshes.render,
 				meshes.collision,
-				self
+				self,
+				meshes.grass
 			)
 
 
@@ -538,6 +545,8 @@ func _build_chunk_meshes(
 	water_depths: PackedFloat32Array
 ) -> Dictionary:
 	var render_tools: Dictionary = {}
+	var grass_transforms: Array[Transform3D] = []
+	var grass_colors: Array[Color] = []
 	var water_tool: SurfaceTool
 	var collision_tool := SurfaceTool.new()
 	collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -598,6 +607,22 @@ func _build_chunk_meshes(
 				x, z, top, block_types, water_depths,
 				render_tools, biomes[index], collision_tool
 			)
+			var grass_position := Vector3(
+				local_x,
+				(corner_heights[1] + corner_heights[3]) / 2.0,
+				local_z
+			)
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
+			var grass_basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(
+				Vector3(
+					rng.randf_range(0.85, 1.15),
+					rng.randf_range(0.85, 1.15),
+					1.0
+				)
+			)
+			grass_transforms.append(Transform3D(grass_basis, grass_position))
+			grass_colors.append(_get_grass_color(biomes[index]))
 
 	var render_mesh := ArrayMesh.new()
 	for biome_id: int in render_tools:
@@ -606,10 +631,83 @@ func _build_chunk_meshes(
 		)
 	if water_tool:
 		_append_surface_tool(render_mesh, water_tool, _get_water_material())
+	var grass_multimesh: MultiMesh = _build_grass_multimesh(
+		grass_transforms, grass_colors
+	)
 	return {
 		"render": render_mesh,
-		"collision": collision_tool.commit()
+		"collision": collision_tool.commit(),
+		"grass": grass_multimesh
 	}
+
+
+func _build_grass_multimesh(
+	transforms: Array[Transform3D], colors: Array[Color]
+) -> MultiMesh:
+	if transforms.is_empty():
+		return null
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_custom_data = true
+	multimesh.mesh = _get_grass_mesh()
+	multimesh.instance_count = transforms.size()
+	for index in range(transforms.size()):
+		multimesh.set_instance_transform(index, transforms[index])
+		multimesh.set_instance_custom_data(index, colors[index])
+	return multimesh
+
+
+func _get_grass_mesh() -> QuadMesh:
+	if _grass_mesh:
+		return _grass_mesh
+	_grass_mesh = QuadMesh.new()
+	_grass_mesh.size = Vector2(0.58, 0.75)
+	_grass_mesh.material = _get_grass_material()
+	return _grass_mesh
+
+
+func _get_grass_material() -> ShaderMaterial:
+	if _grass_material:
+		return _grass_material
+	_grass_material = ShaderMaterial.new()
+	_grass_material.shader = GRASS_SHADER
+	_grass_material.set_shader_parameter("grass_texture", _get_grass_texture())
+	return _grass_material
+
+
+func _get_grass_texture() -> ImageTexture:
+	if _grass_texture:
+		return _grass_texture
+	var image := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	image.fill(Color.TRANSPARENT)
+	var rows: Array[String] = [
+		"..#.....",
+		"..##...#",
+		".###..##",
+		".##.####",
+		"##..####",
+		"##.#####",
+		"#.######",
+		".######."
+	]
+	for y in range(rows.size()):
+		for x in range(rows[y].length()):
+			if rows[y].substr(x, 1) == "#":
+				image.set_pixel(x, y, Color.WHITE)
+	_grass_texture = ImageTexture.create_from_image(image)
+	return _grass_texture
+
+
+func _get_grass_color(biome: int) -> Color:
+	match biome:
+		Biome.DESERT:
+			return desert_color.lerp(Color(0.95, 0.82, 0.48), 0.45)
+		Biome.SNOWY_TUNDRA:
+			return snowy_tundra_color.lerp(Color.WHITE, 0.2)
+		Biome.FOREST:
+			return forest_color.lerp(Color(0.48, 0.76, 0.28), 0.4)
+		_:
+			return plains_color.lerp(Color(0.78, 0.88, 0.38), 0.3)
 
 
 func _get_chunk_surface_tool(
