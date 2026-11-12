@@ -26,6 +26,16 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 @export var forest_color: Color = Color(0.18, 0.39, 0.20)
 @export var plains_color: Color = Color(0.48, 0.64, 0.32)
 
+@export_group("Oceano")
+@export var ocean_surface_height: float = 0.0
+@export_range(0.25, 2.0, 0.25) var shallow_water_depth: float = 0.5
+@export_range(0.5, 3.0, 0.25) var medium_water_depth: float = 1.0
+@export_range(0.75, 4.0, 0.25) var deep_water_depth: float = 1.5
+@export_range(0.0, 0.5, 0.01) var submerge_per_depth_unit: float = 0.15
+@export_range(0.0, 0.75, 0.01) var maximum_submerge: float = 0.3
+@export_range(0.1, 0.9, 0.05) var water_opacity: float = 0.65
+@export var ocean_floor_color: Color = Color(0.25, 0.31, 0.30)
+
 @export_group("Rampas")
 @export_range(0.25, 2.0, 0.25) var ramp_max_height_difference: float = 0.75
 
@@ -35,6 +45,8 @@ var _temperature_noise: FastNoiseLite = FastNoiseLite.new()
 var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
 var _tile_mesh: BoxMesh = BoxMesh.new()
 var _tile_shape: BoxShape3D = BoxShape3D.new()
+var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
+var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
 var _ramp_meshes: Dictionary = {}
 
@@ -48,6 +60,7 @@ func _ready() -> void:
 	_moisture_noise = _create_noise(300, 2)
 	_tile_mesh.size = Vector3(TILE_SIZE, TILE_DEPTH, TILE_SIZE)
 	_tile_shape.size = _tile_mesh.size
+	_water_surface_mesh.size = Vector2(TILE_SIZE, TILE_SIZE)
 	_generate_tiles()
 	_place_pawns_on_tiles()
 	super._ready()
@@ -64,41 +77,54 @@ func _generate_tiles() -> void:
 	var first_z: int = -int(GRID_DEPTH / 2)
 	var heights := PackedFloat32Array()
 	var biomes := PackedInt32Array()
+	var water_depths := PackedFloat32Array()
 	heights.resize(GRID_WIDTH * GRID_DEPTH)
 	biomes.resize(GRID_WIDTH * GRID_DEPTH)
+	water_depths.resize(GRID_WIDTH * GRID_DEPTH)
 
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
 			var grid_x: int = first_x + x
 			var grid_z: int = first_z + z
-			var column: Vector2 = _get_column(grid_x, grid_z)
+			var column: Vector3 = _get_column(grid_x, grid_z)
 			var index: int = _height_index(x, z)
 			heights[index] = column.x
 			biomes[index] = int(column.y)
+			water_depths[index] = column.z
 
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
 			var height: float = heights[index]
 			var biome: int = biomes[index]
-			var ramp_direction: Vector2i = _get_ramp_direction(x, z, heights)
+			var ramp_direction: Vector2i = _get_ramp_direction(x, z, heights, biomes)
 			var ramp_height: float = 0.0
 			if ramp_direction != Vector2i.ZERO:
 				var higher_x: int = x + ramp_direction.x
 				var higher_z: int = z + ramp_direction.y
 				ramp_height = heights[_height_index(higher_x, higher_z)] - height
 			_create_tile(
-				first_x + x, first_z + z, height, biome, ramp_direction, ramp_height
+				first_x + x,
+				first_z + z,
+				height,
+				biome,
+				water_depths[index],
+				ramp_direction,
+				ramp_height
 			)
 
 
-func _get_ramp_direction(x: int, z: int, heights: PackedFloat32Array) -> Vector2i:
+func _get_ramp_direction(
+	x: int, z: int, heights: PackedFloat32Array, biomes: PackedInt32Array
+) -> Vector2i:
 	var directions: Array[Vector2i] = [
 		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
 	]
 	var best_direction: Vector2i = Vector2i.ZERO
 	var best_rise: float = 0.0
 	var current_height: float = heights[_height_index(x, z)]
+	if biomes[_height_index(x, z)] == Biome.OCEAN:
+		return best_direction
 
 	for direction: Vector2i in directions:
 		var neighbor_x: int = x + direction.x
@@ -106,6 +132,8 @@ func _get_ramp_direction(x: int, z: int, heights: PackedFloat32Array) -> Vector2
 		if neighbor_x < 0 or neighbor_x >= GRID_WIDTH:
 			continue
 		if neighbor_z < 0 or neighbor_z >= GRID_DEPTH:
+			continue
+		if biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN:
 			continue
 		var rise: float = heights[_height_index(neighbor_x, neighbor_z)] - current_height
 		if (
@@ -168,7 +196,7 @@ func _create_noise(seed_offset: int, octave_count: int) -> FastNoiseLite:
 	return noise
 
 
-func _get_column(x: int, z: int) -> Vector2:
+func _get_column(x: int, z: int) -> Vector3:
 	var world_x: float = float(x)
 	var world_z: float = float(z)
 	var continentality: float = _continentality_noise.get_noise_2d(world_x, world_z)
@@ -185,7 +213,19 @@ func _get_column(x: int, z: int) -> Vector2:
 	)
 	height = roundf(height / HEIGHT_INTERVAL) * HEIGHT_INTERVAL
 	var biome: int = _get_biome(continentality, temperature, moisture)
-	return Vector2(height, float(biome))
+	var water_depth: float = 0.0
+	if biome == Biome.OCEAN:
+		height = ocean_surface_height
+		water_depth = _get_ocean_depth(continentality)
+	return Vector3(height, float(biome), water_depth)
+
+
+func _get_ocean_depth(continentality: float) -> float:
+	if continentality < -0.65:
+		return deep_water_depth
+	if continentality < -0.4:
+		return medium_water_depth
+	return shallow_water_depth
 
 
 func _get_biome(continentality: float, temperature: float, moisture: float) -> int:
@@ -205,14 +245,22 @@ func _create_tile(
 	z: int,
 	height: float,
 	biome: int,
+	water_depth: float,
 	ramp_direction: Vector2i = Vector2i.ZERO,
 	ramp_height: float = 0.0
 ) -> void:
 	var tile: TacticsTile = TacticsTile.new()
 	tile.name = "Tile_%d_%d" % [x, z]
+	var is_ocean: bool = biome == Biome.OCEAN
 	var is_ramp: bool = ramp_direction != Vector2i.ZERO
 	var tile_center_height: float = height + ramp_height / 2.0 if is_ramp else height
 	tile.position = Vector3(x, tile_center_height, z)
+	tile.set_meta("biome", biome)
+	tile.set_meta("water_depth", water_depth)
+	tile.set_meta(
+		"water_submerge",
+		minf(water_depth * submerge_per_depth_unit, maximum_submerge)
+	)
 	tile.collision_layer = 1
 	tile.collision_mask = 1
 
@@ -225,6 +273,8 @@ func _create_tile(
 	else:
 		collision.shape = _tile_shape
 		collision.position.y = -TILE_DEPTH / 2.0
+		if is_ocean:
+			collision.position.y -= water_depth
 	tile.add_child(collision)
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
@@ -233,7 +283,19 @@ func _create_tile(
 	mesh_instance.material_override = _get_material(biome)
 	if not is_ramp:
 		mesh_instance.position.y = -TILE_DEPTH / 2.0
+		if is_ocean:
+			mesh_instance.position.y -= water_depth
 	tile.add_child(mesh_instance)
+
+	if is_ocean:
+		var water_surface := MeshInstance3D.new()
+		water_surface.name = "WaterSurface"
+		water_surface.mesh = _water_surface_mesh
+		water_surface.material_override = _get_water_material()
+		water_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		water_surface.position.y = 0.01
+		tile.add_child(water_surface)
+
 	tile.visible_as_floor = true
 
 	tile.configure_tile()
@@ -317,7 +379,7 @@ func _get_material(biome: int) -> StandardMaterial3D:
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	match biome:
 		Biome.OCEAN:
-			material.albedo_color = ocean_color
+			material.albedo_color = ocean_floor_color
 		Biome.DESERT:
 			material.albedo_color = desert_color
 		Biome.SNOWY_TUNDRA:
@@ -330,3 +392,16 @@ func _get_material(biome: int) -> StandardMaterial3D:
 	material.roughness = 1.0
 	_materials[biome] = material
 	return material
+
+
+func _get_water_material() -> StandardMaterial3D:
+	if _water_material:
+		return _water_material
+
+	_water_material = StandardMaterial3D.new()
+	_water_material.albedo_color = Color(
+		ocean_color.r, ocean_color.g, ocean_color.b, water_opacity
+	)
+	_water_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_water_material.roughness = 0.2
+	return _water_material

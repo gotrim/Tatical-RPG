@@ -7,6 +7,20 @@ var animator: AnimationNodeStateMachinePlayback = null
 ## Current frame of the sprite animation
 var curr_frame: int = 0
 
+func _process(delta: float) -> void:
+	var pawn: TacticsPawn = get_parent() as TacticsPawn
+	if not pawn:
+		return
+
+	var submerge: float = 0.0
+	var current_tile: TacticsTile = pawn.get_tile()
+	if current_tile and current_tile.has_meta("water_submerge"):
+		submerge = float(current_tile.get_meta("water_submerge"))
+
+	var target_offset_y: float = submerge / maxf(pixel_size, 0.001)
+	offset.y = move_toward(offset.y, target_offset_y, delta * 40.0)
+
+
 ## Reference to the AnimationTree node
 @onready var animation_tree: AnimationTree = $AnimationTree
 ## Reference to the Label3D node displaying the pawn's name
