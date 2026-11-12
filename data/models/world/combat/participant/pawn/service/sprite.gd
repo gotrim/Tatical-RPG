@@ -53,7 +53,7 @@ func get_localized_expertise(expertise: String) -> String:
 func start_animator(
 	move_direction: Vector3, is_jumping: bool, is_swimming: bool
 ) -> void:
-	self_modulate = Color(0.7, 0.88, 1.0, 1.0) if is_swimming else Color.WHITE
+	modulate = Color(0.7, 0.88, 1.0, 1.0) if is_swimming else Color.WHITE
 	if is_swimming:
 		animator.travel("SWIM")
 	elif is_jumping and move_direction != Vector3.ZERO:
