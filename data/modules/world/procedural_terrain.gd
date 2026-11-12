@@ -17,6 +17,9 @@ extends Node3D
 @export_group("Pontos de interesse")
 @export var points_of_interest: Array[TerrainPointOfInterest] = []
 
+@export_group("Rampas")
+@export var ramps: Array[TerrainRamp] = []
+
 @export_group("Inclinação e bioma")
 @export_range(0.0, 89.0, 0.5) var grass_max_slope_degrees: float = 28.0
 @export_range(0.0, 89.0, 0.5) var rock_full_slope_degrees: float = 48.0
@@ -29,6 +32,8 @@ extends Node3D
 
 var _noise: FastNoiseLite = FastNoiseLite.new()
 var _sample_spacing: float = 1.0
+var _ramp_start_heights: PackedFloat32Array = PackedFloat32Array()
+var _ramp_end_heights: PackedFloat32Array = PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -39,6 +44,7 @@ func _ready() -> void:
 func rebuild_terrain() -> void:
 	_configure_noise()
 	_sample_spacing = chunk_size / float(resolution - 1)
+	_cache_ramp_heights()
 
 	var heights := PackedFloat32Array()
 	heights.resize(resolution * resolution)
@@ -162,6 +168,47 @@ func _configure_noise() -> void:
 
 
 func _get_height(world_x: float, world_z: float) -> float:
+	var base_height: float = _get_base_height(world_x, world_z)
+	var best_weight: float = 0.0
+	var best_ramp_height: float = base_height
+
+	for ramp_index in range(ramps.size()):
+		var ramp: TerrainRamp = ramps[ramp_index]
+		if not is_instance_valid(ramp):
+			continue
+		var segment: Vector2 = ramp.end - ramp.start
+		var segment_length_squared: float = segment.length_squared()
+		if segment_length_squared <= 0.0001:
+			continue
+
+		var point_from_start := Vector2(world_x, world_z) - ramp.start
+		var progress: float = point_from_start.dot(segment) / segment_length_squared
+		if progress < 0.0 or progress > 1.0:
+			continue
+		var perpendicular_distance: float = absf(
+			point_from_start.x * segment.y - point_from_start.y * segment.x
+		) / sqrt(segment_length_squared)
+		var weight: float = 0.0
+		if perpendicular_distance <= ramp.half_width:
+			weight = 1.0
+		elif ramp.blend_width > 0.0 and perpendicular_distance < ramp.half_width + ramp.blend_width:
+			var blend_t: float = (
+				perpendicular_distance - ramp.half_width
+			) / ramp.blend_width
+			weight = 1.0 - _smoothstep01(blend_t)
+
+		if weight > best_weight:
+			best_weight = weight
+			best_ramp_height = lerpf(
+				_ramp_start_heights[ramp_index],
+				_ramp_end_heights[ramp_index],
+				progress
+			)
+
+	return lerpf(base_height, best_ramp_height, best_weight)
+
+
+func _get_base_height(world_x: float, world_z: float) -> float:
 	var height_offset: float = global_position.y
 	var raw_height: float = (
 		_noise.get_noise_2d(world_x, world_z) * height_amplitude + height_offset
@@ -187,6 +234,23 @@ func _get_height(world_x: float, world_z: float) -> float:
 			) * height_amplitude + height_offset
 
 	return lerpf(raw_height, best_flat_height, best_weight)
+
+
+func _cache_ramp_heights() -> void:
+	_ramp_start_heights.resize(ramps.size())
+	_ramp_end_heights.resize(ramps.size())
+	for ramp_index in range(ramps.size()):
+		var ramp: TerrainRamp = ramps[ramp_index]
+		if not is_instance_valid(ramp):
+			_ramp_start_heights[ramp_index] = 0.0
+			_ramp_end_heights[ramp_index] = 0.0
+			continue
+		_ramp_start_heights[ramp_index] = _get_base_height(
+			ramp.start.x, ramp.start.y
+		)
+		_ramp_end_heights[ramp_index] = _get_base_height(
+			ramp.end.x, ramp.end.y
+		)
 
 
 func _get_grid_height_gradient_x(heights: PackedFloat32Array, x: int, z: int) -> float:
