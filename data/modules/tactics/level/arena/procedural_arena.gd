@@ -6,10 +6,33 @@ const TILE_SIZE: float = 1.01
 const TILE_DEPTH: float = 0.8
 const HEIGHT_INTERVAL: float = 0.25
 
+enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
+
+@export_group("Geração de terreno")
+@export var world_seed: int = 42
+## Escala menor que 50 para mostrar variedade neste tabuleiro tático de 23x23.
+@export_range(4.0, 100.0, 1.0) var noise_scale: float = 18.0
+@export_range(-2.0, 2.0, 0.25) var base_height: float = 0.0
+@export_range(0.0, 4.0, 0.25) var continentality_height: float = 1.5
+@export_range(0.0, 2.0, 0.25) var erosion_strength: float = 0.75
+@export_range(-4.0, 0.0, 0.25) var minimum_height: float = -1.0
+@export_range(0.25, 4.0, 0.25) var maximum_height: float = 2.0
+@export_range(0.1, 0.9, 0.05) var noise_persistence: float = 0.5
+
+@export_group("Cores dos biomas")
+@export var ocean_color: Color = Color(0.12, 0.30, 0.48)
+@export var desert_color: Color = Color(0.72, 0.59, 0.34)
+@export var snowy_tundra_color: Color = Color(0.82, 0.87, 0.90)
+@export var forest_color: Color = Color(0.18, 0.39, 0.20)
+@export var plains_color: Color = Color(0.48, 0.64, 0.32)
+
 @export_group("Rampas")
 @export_range(0.25, 2.0, 0.25) var ramp_max_height_difference: float = 0.75
 
-var _height_noise: FastNoiseLite = FastNoiseLite.new()
+var _continentality_noise: FastNoiseLite = FastNoiseLite.new()
+var _erosion_noise: FastNoiseLite = FastNoiseLite.new()
+var _temperature_noise: FastNoiseLite = FastNoiseLite.new()
+var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
 var _tile_mesh: BoxMesh = BoxMesh.new()
 var _tile_shape: BoxShape3D = BoxShape3D.new()
 var _materials: Dictionary = {}
@@ -19,9 +42,10 @@ var _ramp_meshes: Dictionary = {}
 func _ready() -> void:
 	_clear_tiles()
 	$Terrain.visible = false
-	_height_noise.seed = 2026
-	_height_noise.frequency = 0.075
-	_height_noise.fractal_octaves = 3
+	_continentality_noise = _create_noise(0, 4)
+	_erosion_noise = _create_noise(100, 3)
+	_temperature_noise = _create_noise(200, 2)
+	_moisture_noise = _create_noise(300, 2)
 	_tile_mesh.size = Vector3(TILE_SIZE, TILE_DEPTH, TILE_SIZE)
 	_tile_shape.size = _tile_mesh.size
 	_generate_tiles()
@@ -39,17 +63,24 @@ func _generate_tiles() -> void:
 	var first_x: int = -int(GRID_WIDTH / 2)
 	var first_z: int = -int(GRID_DEPTH / 2)
 	var heights := PackedFloat32Array()
+	var biomes := PackedInt32Array()
 	heights.resize(GRID_WIDTH * GRID_DEPTH)
+	biomes.resize(GRID_WIDTH * GRID_DEPTH)
 
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
 			var grid_x: int = first_x + x
 			var grid_z: int = first_z + z
-			heights[_height_index(x, z)] = _get_height(grid_x, grid_z)
+			var column: Vector2 = _get_column(grid_x, grid_z)
+			var index: int = _height_index(x, z)
+			heights[index] = column.x
+			biomes[index] = int(column.y)
 
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
-			var height: float = heights[_height_index(x, z)]
+			var index: int = _height_index(x, z)
+			var height: float = heights[index]
+			var biome: int = biomes[index]
 			var ramp_direction: Vector2i = _get_ramp_direction(x, z, heights)
 			var ramp_height: float = 0.0
 			if ramp_direction != Vector2i.ZERO:
@@ -57,7 +88,7 @@ func _generate_tiles() -> void:
 				var higher_z: int = z + ramp_direction.y
 				ramp_height = heights[_height_index(higher_x, higher_z)] - height
 			_create_tile(
-				first_x + x, first_z + z, height, ramp_direction, ramp_height
+				first_x + x, first_z + z, height, biome, ramp_direction, ramp_height
 			)
 
 
@@ -125,15 +156,55 @@ func _place_pawns_on_tiles() -> void:
 				(pawn.get_node("Tile") as RayCast3D).force_raycast_update()
 
 
-func _get_height(x: int, z: int) -> float:
-	var noise_value: float = _height_noise.get_noise_2d(float(x), float(z)) * 2.0
-	return roundf(noise_value / HEIGHT_INTERVAL) * HEIGHT_INTERVAL
+func _create_noise(seed_offset: int, octave_count: int) -> FastNoiseLite:
+	var noise := FastNoiseLite.new()
+	noise.seed = world_seed + seed_offset
+	noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise.frequency = 1.0 / maxf(noise_scale, 0.001)
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise.fractal_octaves = octave_count
+	noise.fractal_gain = noise_persistence
+	noise.fractal_lacunarity = 2.0
+	return noise
+
+
+func _get_column(x: int, z: int) -> Vector2:
+	var world_x: float = float(x)
+	var world_z: float = float(z)
+	var continentality: float = _continentality_noise.get_noise_2d(world_x, world_z)
+	var erosion: float = _erosion_noise.get_noise_2d(world_x, world_z)
+	var temperature: float = _temperature_noise.get_noise_2d(world_x, world_z)
+	var moisture: float = _moisture_noise.get_noise_2d(world_x, world_z)
+
+	var height: float = clampf(
+		base_height
+		+ continentality * continentality_height
+		- erosion * erosion_strength,
+		minimum_height,
+		maximum_height
+	)
+	height = roundf(height / HEIGHT_INTERVAL) * HEIGHT_INTERVAL
+	var biome: int = _get_biome(continentality, temperature, moisture)
+	return Vector2(height, float(biome))
+
+
+func _get_biome(continentality: float, temperature: float, moisture: float) -> int:
+	if continentality < -0.2:
+		return Biome.OCEAN
+	if temperature > 0.3 and moisture < -0.2:
+		return Biome.DESERT
+	if temperature < -0.3:
+		return Biome.SNOWY_TUNDRA
+	if moisture > 0.2:
+		return Biome.FOREST
+	return Biome.PLAINS
 
 
 func _create_tile(
 	x: int,
 	z: int,
 	height: float,
+	biome: int,
 	ramp_direction: Vector2i = Vector2i.ZERO,
 	ramp_height: float = 0.0
 ) -> void:
@@ -159,7 +230,7 @@ func _create_tile(
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	mesh_instance.name = "Tile"
 	mesh_instance.mesh = tile_mesh
-	mesh_instance.material_override = _get_material(tile_center_height)
+	mesh_instance.material_override = _get_material(biome)
 	if not is_ramp:
 		mesh_instance.position.y = -TILE_DEPTH / 2.0
 	tile.add_child(mesh_instance)
@@ -239,14 +310,23 @@ func _add_ramp_triangle(
 	surface.add_vertex(c)
 
 
-func _get_material(height: float) -> StandardMaterial3D:
-	var height_band: int = roundi(height / HEIGHT_INTERVAL)
-	if _materials.has(height_band):
-		return _materials[height_band]
+func _get_material(biome: int) -> StandardMaterial3D:
+	if _materials.has(biome):
+		return _materials[biome]
 
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.670588, 0.839216, 0.784314, 1.0)
+	match biome:
+		Biome.OCEAN:
+			material.albedo_color = ocean_color
+		Biome.DESERT:
+			material.albedo_color = desert_color
+		Biome.SNOWY_TUNDRA:
+			material.albedo_color = snowy_tundra_color
+		Biome.FOREST:
+			material.albedo_color = forest_color
+		_:
+			material.albedo_color = plains_color
 	material.metallic_specular = 0.0
-	material.roughness = 0.0
-	_materials[height_band] = material
+	material.roughness = 1.0
+	_materials[biome] = material
 	return material
