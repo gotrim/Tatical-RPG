@@ -25,6 +25,7 @@ var serv: TacticsControlsService
 @onready var layout_pc: Texture2D = load("res://assets/textures/ui/labels/controls-ui.png")
 ## Node for capturing mouse clicks
 @onready var input_capture: InputCapture = $InputCapture
+@onready var camera_lock_button: Button = $CameraLockButton
 #endregion
 
 #region: --- Processing ---
@@ -37,7 +38,7 @@ func _ready() -> void:
 	for action: String in controls.actions.keys():
 		var str_name: StringName = controls.actions[action]
 		get_act(action).connect("pressed", Callable(self, str_name))
-	$CameraLockButton.toggled.connect(_on_camera_lock_toggled)
+	camera_lock_button.pressed.connect(_on_camera_lock_button_pressed)
 
 func _physics_process(delta: float) -> void:
 	# Handle physics-based processing
@@ -52,7 +53,7 @@ func _input(event: InputEvent) -> void:
 		and not event.echo
 		and event.keycode == KEY_ESCAPE
 	):
-		$CameraLockButton.button_pressed = false
+		_set_camera_locked(false)
 		get_viewport().set_input_as_handled()
 		return
 	serv.handle_input(event)
@@ -74,9 +75,13 @@ func move_camera(delta: float) -> void:
 	serv.move_camera(delta)
 
 
-func _on_camera_lock_toggled(locked: bool) -> void:
+func _on_camera_lock_button_pressed() -> void:
+	_set_camera_locked(not controls.camera_mouse_locked)
+
+
+func _set_camera_locked(locked: bool) -> void:
 	serv.set_camera_locked(locked)
-	$CameraLockButton.text = "Destravar câmera (Esc)" if locked else "Travar câmera"
+	camera_lock_button.text = "Destravar câmera (Esc)" if locked else "Travar câmera"
 
 
 ## Retrieves an action button node

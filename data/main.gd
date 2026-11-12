@@ -9,12 +9,15 @@ var level_instance: TacticsLevel
 @onready var world: Node3D = $World
 ## Reference to the demo map button
 @onready var demo_map: Button = $UI/MapSelector/MapButtons/LoadMap0
+## Button for capturing mouse input after entering a map
+@onready var camera_lock_button: Button = $TacticsControls/CameraLockButton
 #endregion
 
 #region: --- Processing ---
 ## Called when the node enters the scene tree for the first time
 func _ready() -> void:
 	demo_map.grab_focus() # Set focus on the demo map button
+	camera_lock_button.hide()
 #endregion
 
 #region: --- Signals ---
@@ -47,4 +50,5 @@ func load_level(level_name: String, procedural: bool = false) -> void:
 		level_instance.camera_boundary_radius = 16.0
 	world.add_child(level_instance) # Add the new level to the World node
 	$UI/MapSelector.visible = false # Hide the map selector UI
+	camera_lock_button.show()
 #endregion

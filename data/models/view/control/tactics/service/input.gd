@@ -16,15 +16,19 @@ func _init(_controls: TacticsControlsResource, _input_capture: Node) -> void:
 
 ## Updates the mouse mode based on whether a joystick is being used.
 func update_mouse_mode() -> void:
-	if controls.camera_mouse_locked:
-		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	else:
-		Input.set_mouse_mode(int(controls.is_joystick))
+	var desired_mode: int = (
+		Input.MOUSE_MODE_CAPTURED
+		if controls.camera_mouse_locked
+		else int(controls.is_joystick)
+	)
+	if Input.get_mouse_mode() != desired_mode:
+		Input.set_mouse_mode(desired_mode)
 
 
 ## Captures the mouse and enables continuous free look until it is unlocked.
 func set_camera_locked(locked: bool) -> void:
 	controls.camera_mouse_locked = locked
+	TacticsCameraResource.mouse_camera_locked = locked
 	TacticsCameraResource.in_free_look = locked
 	if not locked:
 		InputCaptureResource.free_look_pressed = false

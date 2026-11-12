@@ -44,7 +44,12 @@ func process(delta: float, camera: TacticsCamera) -> void:
 		rotate.rotate_camera(delta, camera.t_pivot, camera.p_pivot)
 	
 	var input_dir: Vector2 = InputCaptureResource.cam_direction
-	if input_dir == Vector2.ZERO and pan.is_cursor_near_edge(camera) and not controls.is_joystick:
+	if (
+		input_dir == Vector2.ZERO
+		and pan.is_cursor_near_edge(camera)
+		and not controls.is_joystick
+		and not TacticsCameraResource.mouse_camera_locked
+	):
 		pan.edge_pan(delta, camera)
 	elif input_dir == Vector2.ZERO:
 		res.panning_timer = 0.0

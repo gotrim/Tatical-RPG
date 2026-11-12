@@ -106,7 +106,6 @@ offset_bottom = 56.0
 grow_horizontal = 0
 mouse_filter = 0
 text = "Travar câmera"
-toggle_mode = true
 
 [node name="Cancel" type="Button" parent="HBox/Actions"]
 custom_minimum_size = Vector2(196, 64)

@@ -47,7 +47,7 @@ func rotate_camera(delta: float, t_pivot: Node3D, p_pivot: Node3D) -> void:
 
 ## Checks and handles free look activation based on input type
 func check_free_look_activation(delta: float, camera: TacticsCamera) -> void:
-	if controls.camera_mouse_locked:
+	if TacticsCameraResource.mouse_camera_locked:
 		res.in_free_look = true
 	elif controls.is_joystick: # ----------------------------------------- gamepad
 		if is_joystick_input_active():
@@ -88,6 +88,8 @@ func add_angle_to_horiz_rotation(twist: int) -> void:
 
 ## Gets the input for free look based on control type
 func get_free_look_input() -> Vector2:
+	if TacticsCameraResource.mouse_camera_locked:
+		return get_free_look_mouse_input()
 	return get_free_look_joystick_input() if controls.is_joystick else get_free_look_mouse_input()
 
 
