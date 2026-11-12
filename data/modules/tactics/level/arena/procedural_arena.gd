@@ -65,7 +65,7 @@ func _ready() -> void:
 	_moisture_noise = _create_noise(300, 2)
 	_tile_mesh.size = Vector3(TILE_SIZE, TILE_DEPTH, TILE_SIZE)
 	_tile_shape.size = _tile_mesh.size
-	_water_surface_mesh.size = Vector2(TILE_SIZE, TILE_SIZE)
+	_water_surface_mesh.size = Vector2(1.0, 1.0)
 	_generate_tiles()
 	_place_pawns_on_tiles()
 	super._ready()
@@ -97,6 +97,7 @@ func _generate_tiles() -> void:
 			biomes[index] = int(column.y)
 			water_depths[index] = column.z
 
+	_flatten_ocean_shores(heights, biomes)
 	_build_ramp_runs(heights, biomes)
 
 	for x in range(GRID_WIDTH):
@@ -118,6 +119,29 @@ func _generate_tiles() -> void:
 				ramp_direction,
 				ramp_height
 			)
+
+
+func _flatten_ocean_shores(
+	heights: PackedFloat32Array, biomes: PackedInt32Array
+) -> void:
+	var directions: Array[Vector2i] = [
+		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
+	]
+	for x in range(GRID_WIDTH):
+		for z in range(GRID_DEPTH):
+			var index: int = _height_index(x, z)
+			if biomes[index] == Biome.OCEAN:
+				continue
+			for direction: Vector2i in directions:
+				var neighbor_x: int = x + direction.x
+				var neighbor_z: int = z + direction.y
+				if neighbor_x < 0 or neighbor_x >= GRID_WIDTH:
+					continue
+				if neighbor_z < 0 or neighbor_z >= GRID_DEPTH:
+					continue
+				if biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN:
+					heights[index] = maxf(heights[index], ocean_surface_height)
+					break
 
 
 func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedInt32Array) -> void:
@@ -416,7 +440,7 @@ func _create_tile(
 		water_surface.mesh = _water_surface_mesh
 		water_surface.material_override = _get_water_material()
 		water_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		water_surface.position.y = 0.01
+		water_surface.position.y = 0.0
 		tile.add_child(water_surface)
 
 	tile.visible_as_floor = true
