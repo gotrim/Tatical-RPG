@@ -13,6 +13,8 @@ signal turn_ended
 const MIN_HEIGHT_TO_JUMP: int = 1
 ## Strength of gravity applied to the pawn
 const GRAVITY_STRENGTH: int = 6
+## Movement speed multiplier while swimming
+const SWIM_SPEED_MULTIPLIER: float = 0.55
 ## Minimum time required for an attack animation
 const MIN_TIME_FOR_ATTACK: float = 1.0
 ## Number of frames in the pawn's animation
@@ -28,6 +30,8 @@ var can_attack: bool = true
 var is_jumping: bool = false
 ## Whether the pawn is currently moving
 var is_moving: bool = false
+## Whether the pawn is currently swimming in water
+var is_swimming: bool = false
 
 ## The direction the pawn is moving in
 var move_direction: Vector3 = Vector3.ZERO

@@ -14,4 +14,6 @@ func setup(pawn: TacticsPawn) -> void:
 ##
 ## @param pawn: The TacticsPawn to animate
 func start_animator(pawn: TacticsPawn) -> void:
-	pawn.get_node("Character").start_animator(pawn.res.move_direction, pawn.res.is_jumping)
+	pawn.get_node("Character").start_animator(
+		pawn.res.move_direction, pawn.res.is_jumping, pawn.res.is_swimming
+	)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://6eofg7n4asn5"]
+[gd_scene load_steps=22 format=3 uid="uid://6eofg7n4asn5"]
 
 [ext_resource type="Script" path="res://data/modules/tactics/level/pawn/pawn.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://bob12its3i651" path="res://assets/textures/actor/chr_pawn_placeholder.png" id="2"]
@@ -42,6 +42,23 @@ tracks/0/keys = {
 "values": [Vector3(0, 0.602, 0), Vector3(0, 2.2, 0), Vector3(0, 0.602, 0)]
 }
 
+[sub_resource type="Animation" id="Animation_SWIM"]
+resource_name = "SWIM"
+length = 0.8
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.4, 0.8),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector3(0, 0.602, 0), Vector3(0, 0.552, 0), Vector3(0, 0.602, 0)]
+}
+
 [sub_resource type="Animation" id="5"]
 length = 0.001
 tracks/0/type = "value"
@@ -62,7 +79,8 @@ _data = {
 "DAMAGE": SubResource("17"),
 "IDLE": SubResource("4"),
 "JUMP": SubResource("6"),
-"RESET": SubResource("5")
+"RESET": SubResource("5"),
+"SWIM": SubResource("Animation_SWIM")
 }
 
 [sub_resource type="AnimationNodeAnimation" id="18"]
@@ -74,6 +92,9 @@ animation = &"IDLE"
 [sub_resource type="AnimationNodeAnimation" id="10"]
 animation = &"JUMP"
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNode_SWIM"]
+animation = &"SWIM"
+
 [sub_resource type="AnimationNodeStateMachineTransition" id="11"]
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="12"]
@@ -84,6 +105,10 @@ switch_mode = 2
 [sub_resource type="AnimationNodeStateMachineTransition" id="20"]
 switch_mode = 2
 
+[sub_resource type="AnimationNodeStateMachineTransition" id="Transition_IDLE_SWIM"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="Transition_SWIM_IDLE"]
+
 [sub_resource type="AnimationNodeStateMachine" id="7"]
 states/DAMAGE/node = SubResource("18")
 states/DAMAGE/position = Vector2(298.375, 51.5)
@@ -91,7 +116,9 @@ states/IDLE/node = SubResource("9")
 states/IDLE/position = Vector2(299, 133)
 states/JUMP/node = SubResource("10")
 states/JUMP/position = Vector2(512, 133.312)
-transitions = ["IDLE", "JUMP", SubResource("11"), "JUMP", "IDLE", SubResource("12"), "IDLE", "DAMAGE", SubResource("19"), "DAMAGE", "IDLE", SubResource("20")]
+states/SWIM/node = SubResource("AnimationNode_SWIM")
+states/SWIM/position = Vector2(512, 220)
+transitions = ["IDLE", "JUMP", SubResource("11"), "JUMP", "IDLE", SubResource("12"), "IDLE", "DAMAGE", SubResource("19"), "DAMAGE", "IDLE", SubResource("20"), "IDLE", "SWIM", SubResource("Transition_IDLE_SWIM"), "SWIM", "IDLE", SubResource("Transition_SWIM_IDLE")]
 
 [node name="Pawn" type="CharacterBody3D"]
 collision_layer = 2

@@ -72,7 +72,7 @@ func get_pathfinding_tilestack(to: TacticsTile) -> Array:
 	
 	while to:
 		to.hover = true
-		_path_tiles_stack.push_front(to.global_position)
+		_path_tiles_stack.push_front(to.get_standing_position())
 		to = to.pf_root
 		
 	res.path_tiles_stack = _path_tiles_stack

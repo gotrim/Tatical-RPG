@@ -399,7 +399,7 @@ func _place_pawns_on_tiles() -> void:
 					nearest_tile = tile
 
 			if nearest_tile:
-				pawn.global_position = nearest_tile.global_position
+				pawn.global_position = nearest_tile.get_standing_position()
 				occupied_tiles.append(nearest_tile)
 				(pawn.get_node("Tile") as RayCast3D).force_raycast_update()
 

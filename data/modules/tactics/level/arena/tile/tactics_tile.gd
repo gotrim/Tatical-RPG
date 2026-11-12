@@ -76,6 +76,14 @@ func get_tile_occupier() -> Object:
 	return $RayCasting.get_object_above()
 
 
+## Returns the position where a pawn should stand or swim on this tile.
+func get_standing_position() -> Vector3:
+	var standing_position: Vector3 = global_position
+	if float(get_meta("water_depth", 0.0)) > 0.0:
+		standing_position.y -= float(get_meta("water_submerge", 0.0))
+	return standing_position
+
+
 ## Return whether target tile is occupied
 func is_taken() -> bool:
 	return get_tile_occupier() != null

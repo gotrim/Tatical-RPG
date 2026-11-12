@@ -7,20 +7,6 @@ var animator: AnimationNodeStateMachinePlayback = null
 ## Current frame of the sprite animation
 var curr_frame: int = 0
 
-func _process(delta: float) -> void:
-	var pawn: TacticsPawn = get_parent() as TacticsPawn
-	if not pawn:
-		return
-
-	var submerge: float = 0.0
-	var current_tile: TacticsTile = pawn.get_tile()
-	if current_tile and current_tile.has_meta("water_submerge"):
-		submerge = float(current_tile.get_meta("water_submerge"))
-
-	var target_offset_y: float = submerge / maxf(pixel_size, 0.001)
-	offset.y = move_toward(offset.y, target_offset_y, delta * 40.0)
-
-
 ## Reference to the AnimationTree node
 @onready var animation_tree: AnimationTree = $AnimationTree
 ## Reference to the Label3D node displaying the pawn's name
@@ -63,11 +49,16 @@ func get_localized_expertise(expertise: String) -> String:
 ##
 ## @param move_direction: The direction the pawn is moving in
 ## @param is_jumping: Whether the pawn is currently jumping
-func start_animator(move_direction: Vector3, is_jumping: bool) -> void:
-	if move_direction == Vector3.ZERO:
-		animator.travel("IDLE")
-	elif is_jumping:
+## @param is_swimming: Whether the pawn is currently swimming
+func start_animator(
+	move_direction: Vector3, is_jumping: bool, is_swimming: bool
+) -> void:
+	if is_swimming:
+		animator.travel("SWIM")
+	elif is_jumping and move_direction != Vector3.ZERO:
 		animator.travel("JUMP")
+	else:
+		animator.travel("IDLE")
 
 
 ## Rotates the sprite to face the camera and selects the appropriate frame
@@ -94,6 +85,6 @@ func rotate_sprite(_global_basis: Basis) -> void:
 ## @return: Whether the adjustment was successful
 func adjust_to_center(pawn: TacticsPawn) -> bool:
 	if pawn.get_tile() and not pawn.res.is_moving:
-		pawn.global_position = pawn.get_tile().global_position
+		pawn.global_position = pawn.get_tile().get_standing_position()
 		return true
 	return false
