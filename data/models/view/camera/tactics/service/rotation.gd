@@ -47,7 +47,9 @@ func rotate_camera(delta: float, t_pivot: Node3D, p_pivot: Node3D) -> void:
 
 ## Checks and handles free look activation based on input type
 func check_free_look_activation(delta: float, camera: TacticsCamera) -> void:
-	if controls.is_joystick: # ----------------------------------------- gamepad
+	if controls.camera_mouse_locked:
+		res.in_free_look = true
+	elif controls.is_joystick: # ----------------------------------------- gamepad
 		if is_joystick_input_active():
 			DebugLog.debug_nospam("joystick_free_look", true)
 			res.in_free_look = true

@@ -37,6 +37,7 @@ func _ready() -> void:
 	for action: String in controls.actions.keys():
 		var str_name: StringName = controls.actions[action]
 		get_act(action).connect("pressed", Callable(self, str_name))
+	$CameraLockButton.toggled.connect(_on_camera_lock_toggled)
 
 func _physics_process(delta: float) -> void:
 	# Handle physics-based processing
@@ -44,6 +45,16 @@ func _physics_process(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	# Handle input events
+	if (
+		controls.camera_mouse_locked
+		and event is InputEventKey
+		and event.pressed
+		and not event.echo
+		and event.keycode == KEY_ESCAPE
+	):
+		$CameraLockButton.button_pressed = false
+		get_viewport().set_input_as_handled()
+		return
 	serv.handle_input(event)
 #endregion
 
@@ -61,6 +72,11 @@ func set_cursor_shape_to_arrow() -> void:
 ## Moves the camera based on input
 func move_camera(delta: float) -> void:
 	serv.move_camera(delta)
+
+
+func _on_camera_lock_toggled(locked: bool) -> void:
+	serv.set_camera_locked(locked)
+	$CameraLockButton.text = "Destravar câmera (Esc)" if locked else "Travar câmera"
 
 
 ## Retrieves an action button node

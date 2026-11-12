@@ -19,6 +19,8 @@ signal called_set_cursor_shape_to_arrow
 
 ## Indicates whether the current input device is a joystick.
 @export var is_joystick: bool
+## Indicates whether mouse input is captured for continuous camera look.
+var camera_mouse_locked: bool = false
 ## Indicates whether the input hints are folded.
 @export var input_hints_folded: bool
 
