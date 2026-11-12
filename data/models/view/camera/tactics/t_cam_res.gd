@@ -103,8 +103,6 @@ static var in_free_look: bool:
 	set(val):
 		in_free_look = val
 		DebugLog.debug_nospam("in_free_look", val) # Log free look state
-## Whether mouse input is captured for continuous free look.
-static var mouse_camera_locked: bool = false
 ## Timer for free look mode
 var free_look_timer: float = 0.0
 ## Timeout for free look mode

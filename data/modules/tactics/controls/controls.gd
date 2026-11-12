@@ -45,16 +45,16 @@ func _physics_process(delta: float) -> void:
 	serv.physics_process(delta, self)
 
 func _input(event: InputEvent) -> void:
-	# Handle input events
-	if (
-		controls.camera_mouse_locked
-		and event is InputEventKey
-		and event.pressed
-		and not event.echo
-		and event.keycode == KEY_ESCAPE
-	):
-		_set_camera_locked(false)
-		get_viewport().set_input_as_handled()
+	var camera: TacticsCamera = _get_tactics_camera()
+	if camera and camera.camera_travada:
+		if (
+			event is InputEventKey
+			and event.pressed
+			and not event.echo
+			and event.keycode == KEY_ESCAPE
+		):
+			_set_camera_travada(false)
+			get_viewport().set_input_as_handled()
 		return
 	serv.handle_input(event)
 #endregion
@@ -76,12 +76,29 @@ func move_camera(delta: float) -> void:
 
 
 func _on_camera_lock_button_pressed() -> void:
-	_set_camera_locked(not controls.camera_mouse_locked)
+	var camera: TacticsCamera = _get_tactics_camera()
+	if not camera:
+		push_error("Câmera tática não encontrada para travar.")
+		return
+	camera.alternar_camera_travada()
+	_update_camera_lock_button(camera.camera_travada)
 
 
-func _set_camera_locked(locked: bool) -> void:
-	serv.set_camera_locked(locked)
+func _set_camera_travada(value: bool) -> void:
+	var camera: TacticsCamera = _get_tactics_camera()
+	if not camera:
+		push_error("Câmera tática não encontrada para destravar.")
+		return
+	camera.set_camera_travada(value)
+	_update_camera_lock_button(camera.camera_travada)
+
+
+func _update_camera_lock_button(locked: bool) -> void:
 	camera_lock_button.text = "Destravar câmera (Esc)" if locked else "Travar câmera"
+
+
+func _get_tactics_camera() -> TacticsCamera:
+	return get_tree().get_first_node_in_group("tactics_cameras") as TacticsCamera
 
 
 ## Retrieves an action button node

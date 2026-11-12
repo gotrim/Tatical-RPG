@@ -64,11 +64,6 @@ func move_camera(delta: float) -> void:
 	camera_service.move_camera(delta, controls.is_joystick)
 
 
-## Enables or disables captured mouse camera look.
-func set_camera_locked(locked: bool) -> void:
-	input_service.set_camera_locked(locked)
-
-
 ## Handles input events.
 func handle_input(event: InputEvent) -> void:
 	input_service.handle_input(event)

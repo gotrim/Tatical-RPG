@@ -14,6 +14,11 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	var camera: TacticsCamera = get_tree().get_first_node_in_group(
+		"tactics_cameras"
+	) as TacticsCamera
+	if camera and camera.camera_travada:
+		return
 	serv.process_input(event)
 
 
