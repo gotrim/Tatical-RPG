@@ -52,7 +52,12 @@ func show_pawn_stats(v: bool) -> void:
 ##
 ## @return: The TacticsTile the pawn is on
 func get_tile() -> TacticsTile:
-	return $Tile.get_collider()
+	var arena: TacticsArena = get_tree().get_first_node_in_group("tactics_arenas")
+	if arena:
+		var tile: TacticsTile = arena.get_tile_at_world_position(global_position)
+		if tile:
+			return tile
+	return $Tile.get_collider() as TacticsTile
 
 
 ## Checks if the pawn is alive

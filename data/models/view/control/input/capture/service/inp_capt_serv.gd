@@ -105,10 +105,14 @@ func project_mouse_position(collision_mask: int, is_joystick: bool, input_captur
 	if DebugLog.visual_debug:
 		draw_debug_ray(from, to, input_capture.debug_ray_mesh, input_capture)
 	
-	var ray_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to, collision_mask, [])
-	var collider: CollisionObject3D = input_capture.get_world_3d().direct_space_state.intersect_ray(ray_query).get("collider")
-	
-	return collider
+	var ray_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		from, to, collision_mask, []
+	)
+	var hit: Dictionary = input_capture.get_world_3d().direct_space_state.intersect_ray(
+		ray_query
+	)
+	input_capture.last_hit_position = hit.get("position", Vector3.ZERO)
+	return hit.get("collider") as CollisionObject3D
 
 
 func setup_debug_ray(parent: Node3D) -> MeshInstance3D:

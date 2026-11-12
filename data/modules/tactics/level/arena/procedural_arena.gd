@@ -2,11 +2,17 @@ extends TacticsArena
 
 const GRID_WIDTH: int = 23
 const GRID_DEPTH: int = 23
-const TILE_SIZE: float = 1.01
 const TILE_DEPTH: float = 0.8
 const HEIGHT_INTERVAL: float = 0.25
+const BLOCK_AIR: int = 0
+const BLOCK_TERRAIN: int = 1
+const BLOCK_WATER: int = 2
 
 enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
+
+const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
+	"res://data/modules/tactics/level/arena/terrain_chunk_manager.gd"
+)
 
 @export_group("Geração de terreno")
 @export var world_seed: int = 42
@@ -18,6 +24,7 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 @export_range(-4.0, 0.0, 0.25) var minimum_height: float = -1.0
 @export_range(0.25, 4.0, 0.25) var maximum_height: float = 2.0
 @export_range(0.1, 0.9, 0.05) var noise_persistence: float = 0.5
+@export_range(4, 32, 1) var chunk_size_tiles: int = 16
 
 @export_group("Cores dos biomas")
 @export var ocean_color: Color = Color(0.12, 0.30, 0.48)
@@ -45,12 +52,11 @@ var _continentality_noise: FastNoiseLite = FastNoiseLite.new()
 var _erosion_noise: FastNoiseLite = FastNoiseLite.new()
 var _temperature_noise: FastNoiseLite = FastNoiseLite.new()
 var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
-var _tile_mesh: BoxMesh = BoxMesh.new()
-var _tile_shape: BoxShape3D = BoxShape3D.new()
 var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
 var _terrain_meshes: Dictionary = {}
+var _terrain_chunk_manager: Node3D
 var _ramp_directions: Array[Vector2i] = []
 var _ramp_start_heights: PackedFloat32Array = PackedFloat32Array()
 var _ramp_rises: PackedFloat32Array = PackedFloat32Array()
@@ -58,13 +64,12 @@ var _ramp_rises: PackedFloat32Array = PackedFloat32Array()
 
 func _ready() -> void:
 	_clear_tiles()
+	_clear_terrain_chunks()
 	$Terrain.visible = false
 	_continentality_noise = _create_noise(0, 4)
 	_erosion_noise = _create_noise(100, 3)
 	_temperature_noise = _create_noise(200, 2)
 	_moisture_noise = _create_noise(300, 2)
-	_tile_mesh.size = Vector3(TILE_SIZE, TILE_DEPTH, TILE_SIZE)
-	_tile_shape.size = _tile_mesh.size
 	_water_surface_mesh.size = Vector2(1.0, 1.0)
 	_generate_tiles()
 	_place_pawns_on_tiles()
@@ -77,14 +82,24 @@ func _clear_tiles() -> void:
 		tile.free()
 
 
+func _clear_terrain_chunks() -> void:
+	var manager: Node = get_node_or_null("TerrainChunkManager")
+	if manager:
+		remove_child(manager)
+		manager.free()
+	_terrain_chunk_manager = null
+
+
 func _generate_tiles() -> void:
 	var first_x: int = -int(GRID_WIDTH / 2)
 	var first_z: int = -int(GRID_DEPTH / 2)
 	var heights := PackedFloat32Array()
-	var biomes := PackedInt32Array()
+	var biomes := PackedByteArray()
+	var block_types := PackedByteArray()
 	var water_depths := PackedFloat32Array()
 	heights.resize(GRID_WIDTH * GRID_DEPTH)
 	biomes.resize(GRID_WIDTH * GRID_DEPTH)
+	block_types.resize(GRID_WIDTH * GRID_DEPTH)
 	water_depths.resize(GRID_WIDTH * GRID_DEPTH)
 
 	for x in range(GRID_WIDTH):
@@ -95,6 +110,9 @@ func _generate_tiles() -> void:
 			var index: int = _height_index(x, z)
 			heights[index] = column.x
 			biomes[index] = int(column.y)
+			block_types[index] = (
+				BLOCK_WATER if int(column.y) == Biome.OCEAN else BLOCK_TERRAIN
+			)
 			water_depths[index] = column.z
 
 	_flatten_ocean_shores(heights, biomes)
@@ -113,26 +131,24 @@ func _generate_tiles() -> void:
 			var biome: int = biomes[index]
 			var height: float = heights[index]
 			var corner_heights := PackedFloat32Array()
-			var exposed_sides: int = 0
 			if biome != Biome.OCEAN:
 				corner_heights = _get_tile_corner_heights(
 					x, z, terrain_heights, biomes
 				)
 				height = (corner_heights[1] + corner_heights[3]) / 2.0
-				exposed_sides = _get_exposed_side_mask(x, z, biomes)
 			_create_tile(
 				first_x + x,
 				first_z + z,
 				height,
 				biome,
 				water_depths[index],
-				corner_heights,
-				exposed_sides
+				corner_heights
 			)
+	_build_terrain_chunks(first_x, first_z, terrain_heights, biomes, block_types, water_depths)
 
 
 func _flatten_ocean_shores(
-	heights: PackedFloat32Array, biomes: PackedInt32Array
+	heights: PackedFloat32Array, biomes: PackedByteArray
 ) -> void:
 	var directions: Array[Vector2i] = [
 		Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
@@ -160,7 +176,7 @@ func _get_tile_corner_heights(
 	x: int,
 	z: int,
 	terrain_heights: PackedFloat32Array,
-	biomes: PackedInt32Array
+	biomes: PackedByteArray
 ) -> PackedFloat32Array:
 	return PackedFloat32Array([
 		_get_vertex_height(x, z, terrain_heights, biomes),
@@ -174,7 +190,7 @@ func _get_vertex_height(
 	vertex_x: int,
 	vertex_z: int,
 	terrain_heights: PackedFloat32Array,
-	biomes: PackedInt32Array
+	biomes: PackedByteArray
 ) -> float:
 	var adjacent_cells: Array[Vector2i] = [
 		Vector2i(vertex_x - 1, vertex_z - 1),
@@ -200,24 +216,7 @@ func _get_vertex_height(
 	return height_sum / float(sample_count)
 
 
-func _get_exposed_side_mask(x: int, z: int, biomes: PackedInt32Array) -> int:
-	var directions: Array[Vector2i] = [
-		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT
-	]
-	var side_mask: int = 0
-	for side in range(directions.size()):
-		var neighbor_x: int = x + directions[side].x
-		var neighbor_z: int = z + directions[side].y
-		if (
-			neighbor_x < 0 or neighbor_x >= GRID_WIDTH
-			or neighbor_z < 0 or neighbor_z >= GRID_DEPTH
-			or biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN
-		):
-			side_mask |= 1 << side
-	return side_mask
-
-
-func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedInt32Array) -> void:
+func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedByteArray) -> void:
 	var tile_count: int = GRID_WIDTH * GRID_DEPTH
 	_ramp_directions.resize(tile_count)
 	_ramp_start_heights = heights.duplicate()
@@ -279,7 +278,7 @@ func _get_ramp_run_rise(
 	direction: Vector2i,
 	length: int,
 	heights: PackedFloat32Array,
-	biomes: PackedInt32Array
+	biomes: PackedByteArray
 ) -> float:
 	var end_x: int = start_x + direction.x * length
 	var end_z: int = start_z + direction.y * length
@@ -340,7 +339,7 @@ func _assign_ramp_run(
 
 
 func _get_single_ramp_direction(
-	x: int, z: int, heights: PackedFloat32Array, biomes: PackedInt32Array
+	x: int, z: int, heights: PackedFloat32Array, biomes: PackedByteArray
 ) -> Vector2i:
 	var directions: Array[Vector2i] = [
 		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
@@ -466,55 +465,380 @@ func _create_tile(
 	height: float,
 	biome: int,
 	water_depth: float,
-	corner_heights: PackedFloat32Array,
-	exposed_sides: int
+	corner_heights: PackedFloat32Array
 ) -> void:
 	var tile: TacticsTile = TacticsTile.new()
 	tile.name = "Tile_%d_%d" % [x, z]
 	var is_ocean: bool = biome == Biome.OCEAN
 	tile.position = Vector3(x, height, z)
+	tile.set_meta("chunked_terrain", true)
 	tile.set_meta("biome", biome)
 	tile.set_meta("water_depth", water_depth)
 	tile.set_meta(
 		"water_submerge",
 		minf(water_depth * submerge_per_depth_unit, maximum_submerge)
 	)
-	tile.collision_layer = 1
-	tile.collision_mask = 1
-
-	var collision: CollisionShape3D = CollisionShape3D.new()
-	var tile_mesh: Mesh = _tile_mesh
-	if is_ocean:
-		collision.shape = _tile_shape
-		collision.position.y = -TILE_DEPTH / 2.0
-		collision.position.y -= water_depth
-	else:
-		tile_mesh = _get_terrain_mesh(corner_heights, height, exposed_sides)
-		collision.shape = tile_mesh.create_trimesh_shape()
-	tile.add_child(collision)
+	tile.collision_layer = 0
+	tile.collision_mask = 0
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	mesh_instance.name = "Tile"
-	mesh_instance.mesh = tile_mesh
+	mesh_instance.mesh = (
+		_water_surface_mesh if is_ocean else _get_terrain_mesh(corner_heights, height, 0)
+	)
 	mesh_instance.material_override = _get_material(biome)
 	if is_ocean:
-		mesh_instance.position.y = -TILE_DEPTH / 2.0
-		mesh_instance.position.y -= water_depth
+		mesh_instance.position.y = 0.005
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	tile.add_child(mesh_instance)
-
-	if is_ocean:
-		var water_surface := MeshInstance3D.new()
-		water_surface.name = "WaterSurface"
-		water_surface.mesh = _water_surface_mesh
-		water_surface.material_override = _get_water_material()
-		water_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		water_surface.position.y = ocean_surface_height - height
-		tile.add_child(water_surface)
-
-	tile.visible_as_floor = true
-
+	tile.visible_as_floor = false
 	tile.configure_tile()
 	$Tiles.add_child(tile)
+
+
+func _build_terrain_chunks(
+	first_x: int,
+	first_z: int,
+	terrain_heights: PackedFloat32Array,
+	biomes: PackedByteArray,
+	block_types: PackedByteArray,
+	water_depths: PackedFloat32Array
+) -> void:
+	var manager_script: Script = TERRAIN_CHUNK_MANAGER_SCRIPT
+	_terrain_chunk_manager = manager_script.new() as Node3D
+	_terrain_chunk_manager.name = "TerrainChunkManager"
+	add_child(_terrain_chunk_manager)
+
+	for start_x in range(0, GRID_WIDTH, chunk_size_tiles):
+		for start_z in range(0, GRID_DEPTH, chunk_size_tiles):
+			var meshes: Dictionary = _build_chunk_meshes(
+				start_x,
+				start_z,
+				terrain_heights,
+				biomes,
+				block_types,
+				water_depths
+			)
+			_terrain_chunk_manager.call(
+				"add_chunk",
+				"Chunk_%d_%d" % [start_x, start_z],
+				Vector3(first_x + start_x, 0.0, first_z + start_z),
+				meshes.render,
+				meshes.collision,
+				self
+			)
+
+
+func _build_chunk_meshes(
+	chunk_start_x: int,
+	chunk_start_z: int,
+	terrain_heights: PackedFloat32Array,
+	biomes: PackedByteArray,
+	block_types: PackedByteArray,
+	water_depths: PackedFloat32Array
+) -> Dictionary:
+	var render_tools: Dictionary = {}
+	var water_tool: SurfaceTool
+	var collision_tool := SurfaceTool.new()
+	collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var chunk_end_x: int = mini(chunk_start_x + chunk_size_tiles, GRID_WIDTH)
+	var chunk_end_z: int = mini(chunk_start_z + chunk_size_tiles, GRID_DEPTH)
+
+	for x in range(chunk_start_x, chunk_end_x):
+		for z in range(chunk_start_z, chunk_end_z):
+			var index: int = _height_index(x, z)
+			var local_x: float = float(x - chunk_start_x)
+			var local_z: float = float(z - chunk_start_z)
+			var top: Array[Vector3] = []
+			var uv: Array[Vector2] = [
+				Vector2(local_x - 0.5, local_z - 0.5),
+				Vector2(local_x + 0.5, local_z - 0.5),
+				Vector2(local_x + 0.5, local_z + 0.5),
+				Vector2(local_x - 0.5, local_z + 0.5)
+			]
+
+			if block_types[index] == BLOCK_WATER:
+				var floor_height: float = ocean_surface_height - water_depths[index]
+				top = _get_flat_cell_vertices(local_x, local_z, floor_height)
+				var ocean_tool: SurfaceTool = _get_chunk_surface_tool(
+					render_tools, Biome.OCEAN
+				)
+				_add_chunk_top(ocean_tool, top, uv)
+				_add_chunk_top(collision_tool, top, uv)
+				_add_ocean_floor_sides(
+					x, z, local_x, local_z, floor_height,
+					block_types, water_depths, render_tools, collision_tool
+				)
+
+				if water_tool == null:
+					water_tool = SurfaceTool.new()
+					water_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+				var water_top: Array[Vector3] = _get_flat_cell_vertices(
+					local_x, local_z, ocean_surface_height
+				)
+				_add_chunk_top(water_tool, water_top, uv)
+				continue
+
+			var corner_heights: PackedFloat32Array = _get_tile_corner_heights(
+				x, z, terrain_heights, biomes
+			)
+			for corner in range(4):
+				top.append(
+					Vector3(
+						uv[corner].x,
+						corner_heights[corner],
+						uv[corner].y
+					)
+				)
+			var terrain_tool: SurfaceTool = _get_chunk_surface_tool(
+				render_tools, biomes[index]
+			)
+			_add_chunk_top(terrain_tool, top, uv)
+			_add_chunk_top(collision_tool, top, uv)
+			_add_terrain_sides(
+				x, z, top, block_types, water_depths,
+				render_tools, biomes[index], collision_tool
+			)
+
+	var render_mesh := ArrayMesh.new()
+	for biome_id: int in render_tools:
+		_append_surface_tool(
+			render_mesh, render_tools[biome_id], _get_material(biome_id)
+		)
+	if water_tool:
+		_append_surface_tool(render_mesh, water_tool, _get_water_material())
+	return {
+		"render": render_mesh,
+		"collision": collision_tool.commit()
+	}
+
+
+func _get_chunk_surface_tool(
+	surface_tools: Dictionary, material_id: int
+) -> SurfaceTool:
+	if not surface_tools.has(material_id):
+		var surface := SurfaceTool.new()
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		surface_tools[material_id] = surface
+	return surface_tools[material_id] as SurfaceTool
+
+
+func _append_surface_tool(
+	mesh: ArrayMesh, surface: SurfaceTool, material: Material
+) -> void:
+	var partial_mesh: ArrayMesh = surface.commit()
+	for surface_index in range(partial_mesh.get_surface_count()):
+		mesh.add_surface_from_arrays(
+			Mesh.PRIMITIVE_TRIANGLES,
+			partial_mesh.surface_get_arrays(surface_index)
+		)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, material)
+
+
+func _get_flat_cell_vertices(
+	x: float, z: float, height: float
+) -> Array[Vector3]:
+	return [
+		Vector3(x - 0.5, height, z - 0.5),
+		Vector3(x + 0.5, height, z - 0.5),
+		Vector3(x + 0.5, height, z + 0.5),
+		Vector3(x - 0.5, height, z + 0.5)
+	]
+
+
+func _add_chunk_top(
+	surface: SurfaceTool, vertices: Array[Vector3], uvs: Array[Vector2]
+) -> void:
+	var first_normal: Vector3 = (
+		(vertices[3] - vertices[0]).cross(vertices[1] - vertices[0]).normalized()
+	)
+	if first_normal.y < 0.0:
+		first_normal = -first_normal
+	var second_normal: Vector3 = (
+		(vertices[3] - vertices[1]).cross(vertices[2] - vertices[1]).normalized()
+	)
+	if second_normal.y < 0.0:
+		second_normal = -second_normal
+	_add_chunk_triangle(
+		surface, vertices[0], vertices[3], vertices[1],
+		uvs[0], uvs[3], uvs[1], first_normal
+	)
+	_add_chunk_triangle(
+		surface, vertices[1], vertices[3], vertices[2],
+		uvs[1], uvs[3], uvs[2], second_normal
+	)
+
+
+func _add_terrain_sides(
+	x: int,
+	z: int,
+	top: Array[Vector3],
+	block_types: PackedByteArray,
+	water_depths: PackedFloat32Array,
+	render_tools: Dictionary,
+	biome: int,
+	collision_tool: SurfaceTool
+) -> void:
+	var directions: Array[Vector2i] = [
+		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT
+	]
+	var edge_starts: Array[int] = [0, 1, 2, 3]
+	var edge_ends: Array[int] = [1, 2, 3, 0]
+	var edge_normals: Array[Vector3] = [
+		Vector3.FORWARD, Vector3.RIGHT, Vector3.BACK, Vector3.LEFT
+	]
+	var surface: SurfaceTool = _get_chunk_surface_tool(render_tools, biome)
+
+	for side in range(4):
+		var neighbor_x: int = x + directions[side].x
+		var neighbor_z: int = z + directions[side].y
+		var neighbor_type: int = _get_block_type(neighbor_x, neighbor_z, block_types)
+		if not _is_face_visible(BLOCK_TERRAIN, neighbor_type):
+			continue
+		var start: int = edge_starts[side]
+		var end: int = edge_ends[side]
+		var bottom_start_y: float = top[start].y - TILE_DEPTH
+		var bottom_end_y: float = top[end].y - TILE_DEPTH
+		if neighbor_type == BLOCK_WATER:
+			var neighbor_floor: float = (
+				ocean_surface_height
+				- water_depths[_height_index(neighbor_x, neighbor_z)]
+			)
+			bottom_start_y = minf(bottom_start_y, neighbor_floor)
+			bottom_end_y = minf(bottom_end_y, neighbor_floor)
+		var bottom_start := Vector3(top[start].x, bottom_start_y, top[start].z)
+		var bottom_end := Vector3(top[end].x, bottom_end_y, top[end].z)
+		var side_uvs: Array[Vector2] = [
+			Vector2(top[start].x + top[start].z, top[start].y),
+			Vector2(top[end].x + top[end].z, top[end].y),
+			Vector2(top[end].x + top[end].z, bottom_end.y),
+			Vector2(top[start].x + top[start].z, bottom_start.y)
+		]
+		_add_chunk_quad(
+			surface, top[start], top[end], bottom_end, bottom_start,
+			edge_normals[side], side_uvs
+		)
+		_add_chunk_quad(
+			collision_tool, top[start], top[end], bottom_end, bottom_start,
+			edge_normals[side], side_uvs
+		)
+
+
+func _add_ocean_floor_sides(
+	x: int,
+	z: int,
+	local_x: float,
+	local_z: float,
+	floor_height: float,
+	block_types: PackedByteArray,
+	water_depths: PackedFloat32Array,
+	render_tools: Dictionary,
+	collision_tool: SurfaceTool
+) -> void:
+	var directions: Array[Vector2i] = [
+		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT
+	]
+	var edge_starts: Array[int] = [0, 1, 2, 3]
+	var edge_ends: Array[int] = [1, 2, 3, 0]
+	var edge_normals: Array[Vector3] = [
+		Vector3.FORWARD, Vector3.RIGHT, Vector3.BACK, Vector3.LEFT
+	]
+	var top: Array[Vector3] = _get_flat_cell_vertices(local_x, local_z, floor_height)
+	var surface: SurfaceTool = _get_chunk_surface_tool(render_tools, Biome.OCEAN)
+
+	for side in range(4):
+		var neighbor_x: int = x + directions[side].x
+		var neighbor_z: int = z + directions[side].y
+		var neighbor_type: int = _get_block_type(neighbor_x, neighbor_z, block_types)
+		if not _is_face_visible(BLOCK_WATER, neighbor_type):
+			continue
+		var bottom_y: float = floor_height - TILE_DEPTH
+		if neighbor_type == BLOCK_WATER:
+			var neighbor_floor: float = (
+				ocean_surface_height
+				- water_depths[_height_index(neighbor_x, neighbor_z)]
+			)
+			if neighbor_floor >= floor_height:
+				continue
+			bottom_y = neighbor_floor
+		var start: int = edge_starts[side]
+		var end: int = edge_ends[side]
+		var bottom_start := Vector3(top[start].x, bottom_y, top[start].z)
+		var bottom_end := Vector3(top[end].x, bottom_y, top[end].z)
+		var side_uvs: Array[Vector2] = [
+			Vector2(top[start].x + top[start].z, floor_height),
+			Vector2(top[end].x + top[end].z, floor_height),
+			Vector2(top[end].x + top[end].z, bottom_y),
+			Vector2(top[start].x + top[start].z, bottom_y)
+		]
+		_add_chunk_quad(
+			surface, top[start], top[end], bottom_end, bottom_start,
+			edge_normals[side], side_uvs
+		)
+		_add_chunk_quad(
+			collision_tool, top[start], top[end], bottom_end, bottom_start,
+			edge_normals[side], side_uvs
+		)
+
+
+func _get_block_type(x: int, z: int, block_types: PackedByteArray) -> int:
+	if x < 0 or x >= GRID_WIDTH or z < 0 or z >= GRID_DEPTH:
+		return BLOCK_AIR
+	return block_types[_height_index(x, z)]
+
+
+func _is_face_visible(block_type: int, neighbor_type: int) -> bool:
+	return (
+		neighbor_type == BLOCK_AIR
+		or (neighbor_type == BLOCK_WATER and block_type != BLOCK_AIR)
+	)
+
+
+func _add_chunk_quad(
+	surface: SurfaceTool,
+	top_start: Vector3,
+	top_end: Vector3,
+	bottom_end: Vector3,
+	bottom_start: Vector3,
+	normal: Vector3,
+	uvs: Array[Vector2]
+) -> void:
+	_add_chunk_triangle(
+		surface, top_start, top_end, bottom_end,
+		uvs[0], uvs[1], uvs[2], normal
+	)
+	_add_chunk_triangle(
+		surface, top_start, bottom_end, bottom_start,
+		uvs[0], uvs[2], uvs[3], normal
+	)
+
+
+func _add_chunk_triangle(
+	surface: SurfaceTool,
+	a: Vector3,
+	b: Vector3,
+	c: Vector3,
+	uv_a: Vector2,
+	uv_b: Vector2,
+	uv_c: Vector2,
+	normal: Vector3
+) -> void:
+	if (b - a).cross(c - a).dot(normal) > 0.0:
+		var swap_vertex: Vector3 = b
+		b = c
+		c = swap_vertex
+		var swap_uv: Vector2 = uv_b
+		uv_b = uv_c
+		uv_c = swap_uv
+	surface.set_normal(normal.normalized())
+	surface.set_uv(uv_a)
+	surface.add_vertex(a)
+	surface.set_normal(normal.normalized())
+	surface.set_uv(uv_b)
+	surface.add_vertex(b)
+	surface.set_normal(normal.normalized())
+	surface.set_uv(uv_c)
+	surface.add_vertex(c)
 
 
 func _get_terrain_mesh(

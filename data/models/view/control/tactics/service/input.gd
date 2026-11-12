@@ -31,7 +31,13 @@ func get_3d_canvas_mouse_position(collision_mask: int, ctrl: TacticsControls) ->
 		return null
 	
 	if input_capture:
-		return input_capture.project_mouse_position(collision_mask, controls.is_joystick)
+		var collider: Object = input_capture.project_mouse_position(
+			collision_mask, controls.is_joystick
+		)
+		if collider and collider.has_method("resolve_tile_hit"):
+			var capture: InputCapture = input_capture as InputCapture
+			return collider.call("resolve_tile_hit", capture.last_hit_position)
+		return collider
 	else:
 		push_error("Nó InputCapture não encontrado")
 		return null

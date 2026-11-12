@@ -5,6 +5,7 @@ extends Node3D
 var serv: InputCaptureService
 
 var debug_ray_mesh: MeshInstance3D
+var last_hit_position: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:

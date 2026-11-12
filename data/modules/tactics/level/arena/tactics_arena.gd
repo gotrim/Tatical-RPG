@@ -9,9 +9,12 @@ extends Node3D
 @export var res: TacticsArenaResource = load("res://data/models/world/combat/arena/arena.tres")
 ## Service handling arena-related operations
 var serv: TacticsArenaService
+var _tiles_by_grid_position: Dictionary = {}
 
 
 func _ready() -> void:
+	add_to_group("tactics_arenas")
+	_rebuild_tile_lookup()
 	serv = TacticsArenaService.new(res) # Initialize the arena service
 	serv.setup(self) # Set up the arena
 
@@ -24,6 +27,42 @@ func reset_all_tile_markers() -> void:
 ## Configures all tiles in the arena
 func configure_tiles() -> void:
 	serv.configure_tiles(self)
+	_rebuild_tile_lookup()
+
+
+func get_tile_at_world_position(world_position: Vector3) -> TacticsTile:
+	var local_position: Vector3 = to_local(world_position)
+	var grid_position := Vector2i(roundi(local_position.x), roundi(local_position.z))
+	return _tiles_by_grid_position.get(grid_position) as TacticsTile
+
+
+func get_neighbor_tiles(tile: TacticsTile, height: float) -> Array[TacticsTile]:
+	var local_position: Vector3 = to_local(tile.global_position)
+	var grid_position := Vector2i(roundi(local_position.x), roundi(local_position.z))
+	var directions: Array[Vector2i] = [
+		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
+	]
+	var neighbors: Array[TacticsTile] = []
+	for direction: Vector2i in directions:
+		var neighbor: TacticsTile = _tiles_by_grid_position.get(
+			grid_position + direction
+		) as TacticsTile
+		if neighbor and absf(neighbor.global_position.y - tile.global_position.y) <= height:
+			neighbors.append(neighbor)
+	return neighbors
+
+
+func _rebuild_tile_lookup() -> void:
+	_tiles_by_grid_position.clear()
+	var tiles: Node = get_node_or_null("Tiles")
+	if not tiles:
+		return
+	for child: Node in tiles.get_children():
+		if not child is TacticsTile:
+			continue
+		var local_position: Vector3 = to_local((child as TacticsTile).global_position)
+		var grid_position := Vector2i(roundi(local_position.x), roundi(local_position.z))
+		_tiles_by_grid_position[grid_position] = child
 
 
 ## Processes tiles surrounding a given root tile
