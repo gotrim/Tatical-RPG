@@ -8,7 +8,7 @@ path="res://.godot/imported/flower.glb-01959dd43be06ba295af6c3f5d919548.scn"
 
 [deps]
 
-source_file="res://Assets/Meshes/flower.glb"
+source_file="res://data/models/world/Assets/Meshes/flower.glb"
 dest_files=["res://.godot/imported/flower.glb-01959dd43be06ba295af6c3f5d919548.scn"]
 
 [params]
@@ -44,9 +44,7 @@ _subresources={
 "generate/lods": 0,
 "generate/shadow_meshes": 0,
 "lods/normal_merge_angle": 20.0,
-"save_to_file/enabled": true,
-"save_to_file/fallback_path": "res://Assets/Meshes/flower.res",
-"save_to_file/path": "uid://ce7vmw5t8v3i0"
+"save_to_file/enabled": false
 }
 }
 }

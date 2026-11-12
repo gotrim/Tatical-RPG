@@ -10,13 +10,13 @@ func add_chunk(
 	render_mesh: ArrayMesh,
 	collision_mesh: ArrayMesh,
 	arena: TacticsArena,
-	grass_multimeshes: Array[MultiMesh],
+	grass_multimesh: MultiMesh,
 	grass_material: Material
 ) -> void:
 	var chunk := TacticsTerrainChunk.new()
 	chunk.configure(
 		chunk_name, chunk_position, render_mesh, collision_mesh, arena,
-		grass_multimeshes, grass_material
+		grass_multimesh, grass_material
 	)
 	add_child(chunk)
 	chunks.append(chunk)

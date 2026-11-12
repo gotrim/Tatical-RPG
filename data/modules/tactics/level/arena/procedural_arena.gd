@@ -16,9 +16,6 @@ const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
 const GRASS_PLANE_MESH: Mesh = preload(
 	"res://data/models/world/Assets/Meshes/grass_plane_mesh.res"
 )
-const GRASS_TALL_MESH: Mesh = preload(
-	"res://data/models/world/Assets/Meshes/grassTall_plane_mesh.res"
-)
 const GRASS_TEXTURE: Texture2D = preload(
 	"res://data/models/world/Assets/Textures/grass_thin.png"
 )
@@ -550,10 +547,8 @@ func _build_chunk_meshes(
 	water_depths: PackedFloat32Array
 ) -> Dictionary:
 	var render_tools: Dictionary = {}
-	var plane_grass_transforms: Array[Transform3D] = []
-	var plane_grass_colors: Array[Color] = []
-	var tall_grass_transforms: Array[Transform3D] = []
-	var tall_grass_colors: Array[Color] = []
+	var grass_transforms: Array[Transform3D] = []
+	var grass_colors: Array[Color] = []
 	var water_tool: SurfaceTool
 	var collision_tool := SurfaceTool.new()
 	collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -622,11 +617,13 @@ func _build_chunk_meshes(
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
 			var grass_tint: Color = _get_grass_color(biomes[index])
-			var use_tall_grass: bool = rng.randf() < 0.25
 			var base_angle: float = rng.randf_range(0.0, TAU)
+			var grass_height_scale: float = rng.randf_range(1.2, 1.8)
+			if rng.randf() < 0.25:
+				grass_height_scale = rng.randf_range(1.8, 2.4)
 			var grass_scale := Vector3(
 				rng.randf_range(0.9, 1.2),
-				rng.randf_range(1.2, 1.8),
+				grass_height_scale,
 				1.0
 			)
 			for crossing: int in range(2):
@@ -634,12 +631,8 @@ func _build_chunk_meshes(
 					Vector3.UP, base_angle + float(crossing) * PI / 2.0
 				).scaled(grass_scale)
 				var grass_transform := Transform3D(grass_basis, grass_position)
-				if use_tall_grass:
-					tall_grass_transforms.append(grass_transform)
-					tall_grass_colors.append(grass_tint)
-				else:
-					plane_grass_transforms.append(grass_transform)
-					plane_grass_colors.append(grass_tint)
+				grass_transforms.append(grass_transform)
+				grass_colors.append(grass_tint)
 
 	var render_mesh := ArrayMesh.new()
 	for biome_id: int in render_tools:
@@ -648,35 +641,25 @@ func _build_chunk_meshes(
 		)
 	if water_tool:
 		_append_surface_tool(render_mesh, water_tool, _get_water_material())
-	var grass_multimeshes: Array[MultiMesh] = []
-	if not plane_grass_transforms.is_empty():
-		grass_multimeshes.append(
-			_build_grass_multimesh(
-				GRASS_PLANE_MESH, plane_grass_transforms, plane_grass_colors
-			)
-		)
-	if not tall_grass_transforms.is_empty():
-		grass_multimeshes.append(
-			_build_grass_multimesh(
-				GRASS_TALL_MESH, tall_grass_transforms, tall_grass_colors
-			)
-		)
+	var grass_multimesh: MultiMesh = _build_grass_multimesh(
+		grass_transforms, grass_colors
+	)
 	return {
 		"render": render_mesh,
 		"collision": collision_tool.commit(),
-		"grass": grass_multimeshes
+		"grass": grass_multimesh
 	}
 
 
 func _build_grass_multimesh(
-	mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color]
+	transforms: Array[Transform3D], colors: Array[Color]
 ) -> MultiMesh:
 	if transforms.is_empty():
 		return null
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
-	multimesh.mesh = mesh
+	multimesh.mesh = GRASS_PLANE_MESH
 	multimesh.instance_count = transforms.size()
 	for index in range(transforms.size()):
 		multimesh.set_instance_transform(index, transforms[index])
