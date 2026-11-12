@@ -50,7 +50,7 @@ var _tile_shape: BoxShape3D = BoxShape3D.new()
 var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
-var _ramp_meshes: Dictionary = {}
+var _terrain_meshes: Dictionary = {}
 var _ramp_directions: Array[Vector2i] = []
 var _ramp_start_heights: PackedFloat32Array = PackedFloat32Array()
 var _ramp_rises: PackedFloat32Array = PackedFloat32Array()
@@ -100,24 +100,34 @@ func _generate_tiles() -> void:
 	_flatten_ocean_shores(heights, biomes)
 	_build_ramp_runs(heights, biomes)
 
+	var terrain_heights: PackedFloat32Array = heights.duplicate()
+	for index in range(terrain_heights.size()):
+		if _ramp_directions[index] != Vector2i.ZERO:
+			terrain_heights[index] = (
+				_ramp_start_heights[index] + _ramp_rises[index] / 2.0
+			)
+
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
 			var index: int = _height_index(x, z)
-			var height: float = heights[index]
 			var biome: int = biomes[index]
-			var ramp_direction: Vector2i = _ramp_directions[index]
-			var ramp_height: float = _ramp_rises[index]
-			var ramp_start_height: float = (
-				_ramp_start_heights[index] if ramp_direction != Vector2i.ZERO else height
-			)
+			var height: float = heights[index]
+			var corner_heights := PackedFloat32Array()
+			var exposed_sides: int = 0
+			if biome != Biome.OCEAN:
+				corner_heights = _get_tile_corner_heights(
+					x, z, terrain_heights, biomes
+				)
+				height = (corner_heights[1] + corner_heights[3]) / 2.0
+				exposed_sides = _get_exposed_side_mask(x, z, biomes)
 			_create_tile(
 				first_x + x,
 				first_z + z,
-				ramp_start_height,
+				height,
 				biome,
 				water_depths[index],
-				ramp_direction,
-				ramp_height
+				corner_heights,
+				exposed_sides
 			)
 
 
@@ -125,7 +135,9 @@ func _flatten_ocean_shores(
 	heights: PackedFloat32Array, biomes: PackedInt32Array
 ) -> void:
 	var directions: Array[Vector2i] = [
-		Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP
+		Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
+		Vector2i(-1, 0), Vector2i(1, 0),
+		Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)
 	]
 	for x in range(GRID_WIDTH):
 		for z in range(GRID_DEPTH):
@@ -140,8 +152,69 @@ func _flatten_ocean_shores(
 				if neighbor_z < 0 or neighbor_z >= GRID_DEPTH:
 					continue
 				if biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN:
-					heights[index] = maxf(heights[index], ocean_surface_height)
+					heights[index] = ocean_surface_height
 					break
+
+
+func _get_tile_corner_heights(
+	x: int,
+	z: int,
+	terrain_heights: PackedFloat32Array,
+	biomes: PackedInt32Array
+) -> PackedFloat32Array:
+	return PackedFloat32Array([
+		_get_vertex_height(x, z, terrain_heights, biomes),
+		_get_vertex_height(x + 1, z, terrain_heights, biomes),
+		_get_vertex_height(x + 1, z + 1, terrain_heights, biomes),
+		_get_vertex_height(x, z + 1, terrain_heights, biomes)
+	])
+
+
+func _get_vertex_height(
+	vertex_x: int,
+	vertex_z: int,
+	terrain_heights: PackedFloat32Array,
+	biomes: PackedInt32Array
+) -> float:
+	var adjacent_cells: Array[Vector2i] = [
+		Vector2i(vertex_x - 1, vertex_z - 1),
+		Vector2i(vertex_x, vertex_z - 1),
+		Vector2i(vertex_x - 1, vertex_z),
+		Vector2i(vertex_x, vertex_z)
+	]
+	var height_sum: float = 0.0
+	var sample_count: int = 0
+	for cell: Vector2i in adjacent_cells:
+		if (
+			cell.x < 0 or cell.x >= GRID_WIDTH
+			or cell.y < 0 or cell.y >= GRID_DEPTH
+		):
+			continue
+		var index: int = _height_index(cell.x, cell.y)
+		if biomes[index] == Biome.OCEAN:
+			return ocean_surface_height
+		height_sum += terrain_heights[index]
+		sample_count += 1
+	if sample_count == 0:
+		return ocean_surface_height
+	return height_sum / float(sample_count)
+
+
+func _get_exposed_side_mask(x: int, z: int, biomes: PackedInt32Array) -> int:
+	var directions: Array[Vector2i] = [
+		Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT
+	]
+	var side_mask: int = 0
+	for side in range(directions.size()):
+		var neighbor_x: int = x + directions[side].x
+		var neighbor_z: int = z + directions[side].y
+		if (
+			neighbor_x < 0 or neighbor_x >= GRID_WIDTH
+			or neighbor_z < 0 or neighbor_z >= GRID_DEPTH
+			or biomes[_height_index(neighbor_x, neighbor_z)] == Biome.OCEAN
+		):
+			side_mask |= 1 << side
+	return side_mask
 
 
 func _build_ramp_runs(heights: PackedFloat32Array, biomes: PackedInt32Array) -> void:
@@ -393,15 +466,13 @@ func _create_tile(
 	height: float,
 	biome: int,
 	water_depth: float,
-	ramp_direction: Vector2i = Vector2i.ZERO,
-	ramp_height: float = 0.0
+	corner_heights: PackedFloat32Array,
+	exposed_sides: int
 ) -> void:
 	var tile: TacticsTile = TacticsTile.new()
 	tile.name = "Tile_%d_%d" % [x, z]
 	var is_ocean: bool = biome == Biome.OCEAN
-	var is_ramp: bool = ramp_direction != Vector2i.ZERO
-	var tile_center_height: float = height + ramp_height / 2.0 if is_ramp else height
-	tile.position = Vector3(x, tile_center_height, z)
+	tile.position = Vector3(x, height, z)
 	tile.set_meta("biome", biome)
 	tile.set_meta("water_depth", water_depth)
 	tile.set_meta(
@@ -412,26 +483,23 @@ func _create_tile(
 	tile.collision_mask = 1
 
 	var collision: CollisionShape3D = CollisionShape3D.new()
-	var tile_mesh: Mesh = (
-		_get_ramp_mesh(ramp_direction, ramp_height) if is_ramp else _tile_mesh
-	)
-	if is_ramp:
-		collision.shape = tile_mesh.create_trimesh_shape()
-	else:
+	var tile_mesh: Mesh = _tile_mesh
+	if is_ocean:
 		collision.shape = _tile_shape
 		collision.position.y = -TILE_DEPTH / 2.0
-		if is_ocean:
-			collision.position.y -= water_depth
+		collision.position.y -= water_depth
+	else:
+		tile_mesh = _get_terrain_mesh(corner_heights, height, exposed_sides)
+		collision.shape = tile_mesh.create_trimesh_shape()
 	tile.add_child(collision)
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	mesh_instance.name = "Tile"
 	mesh_instance.mesh = tile_mesh
 	mesh_instance.material_override = _get_material(biome)
-	if not is_ramp:
+	if is_ocean:
 		mesh_instance.position.y = -TILE_DEPTH / 2.0
-		if is_ocean:
-			mesh_instance.position.y -= water_depth
+		mesh_instance.position.y -= water_depth
 	tile.add_child(mesh_instance)
 
 	if is_ocean:
@@ -440,7 +508,7 @@ func _create_tile(
 		water_surface.mesh = _water_surface_mesh
 		water_surface.material_override = _get_water_material()
 		water_surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		water_surface.position.y = 0.0
+		water_surface.position.y = ocean_surface_height - height
 		tile.add_child(water_surface)
 
 	tile.visible_as_floor = true
@@ -449,44 +517,59 @@ func _create_tile(
 	$Tiles.add_child(tile)
 
 
-func _get_ramp_mesh(direction: Vector2i, rise: float) -> ArrayMesh:
-	var rise_band: int = roundi(rise * 10000.0)
-	var cache_key: String = "%d_%d_%d" % [direction.x, direction.y, rise_band]
-	if _ramp_meshes.has(cache_key):
-		return _ramp_meshes[cache_key]
-
-	var half_size: float = TILE_SIZE / 2.0
-	var half_rise: float = rise / 2.0
-	var bottom_y: float = -TILE_DEPTH - half_rise
-	var corners: Array[Vector2] = [
-		Vector2(-half_size, -half_size),
-		Vector2(half_size, -half_size),
-		Vector2(half_size, half_size),
-		Vector2(-half_size, half_size)
+func _get_terrain_mesh(
+	corner_heights: PackedFloat32Array, center_height: float, exposed_sides: int
+) -> ArrayMesh:
+	var half_cell: float = 0.5
+	var top: Array[Vector3] = [
+		Vector3(-half_cell, corner_heights[0] - center_height, -half_cell),
+		Vector3(half_cell, corner_heights[1] - center_height, -half_cell),
+		Vector3(half_cell, corner_heights[2] - center_height, half_cell),
+		Vector3(-half_cell, corner_heights[3] - center_height, half_cell)
 	]
-	var top: Array[Vector3] = []
-	var bottom: Array[Vector3] = []
-	for corner: Vector2 in corners:
-		var high_side: bool = corner.dot(Vector2(direction.x, direction.y)) > 0.0
-		top.append(Vector3(corner.x, half_rise if high_side else -half_rise, corner.y))
-		bottom.append(Vector3(corner.x, bottom_y, corner.y))
+	var cache_key: String = "%d_%d_%d_%d_%d" % [
+		roundi((corner_heights[0] - center_height) * 10000.0),
+		roundi((corner_heights[1] - center_height) * 10000.0),
+		roundi((corner_heights[2] - center_height) * 10000.0),
+		roundi((corner_heights[3] - center_height) * 10000.0),
+		exposed_sides
+	]
+	if _terrain_meshes.has(cache_key):
+		return _terrain_meshes[cache_key]
 
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var ramp_normal := Vector3(
-		-direction.x * rise / TILE_SIZE,
-		1.0,
-		-direction.y * rise / TILE_SIZE
-	).normalized()
-	_add_ramp_triangle(surface, top[0], top[3], top[1], ramp_normal)
-	_add_ramp_triangle(surface, top[1], top[3], top[2], ramp_normal)
-	_add_ramp_quad(surface, top[0], top[1], bottom[1], bottom[0], Vector3.FORWARD)
-	_add_ramp_quad(surface, top[1], top[2], bottom[2], bottom[1], Vector3.RIGHT)
-	_add_ramp_quad(surface, top[2], top[3], bottom[3], bottom[2], Vector3.BACK)
-	_add_ramp_quad(surface, top[3], top[0], bottom[0], bottom[3], Vector3.LEFT)
-	var ramp_mesh: ArrayMesh = surface.commit()
-	_ramp_meshes[cache_key] = ramp_mesh
-	return ramp_mesh
+	_add_terrain_triangle(surface, top[0], top[3], top[1])
+	_add_terrain_triangle(surface, top[1], top[3], top[2])
+
+	var edge_starts: Array[int] = [0, 1, 2, 3]
+	var edge_ends: Array[int] = [1, 2, 3, 0]
+	var edge_normals: Array[Vector3] = [
+		Vector3.FORWARD, Vector3.RIGHT, Vector3.BACK, Vector3.LEFT
+	]
+	for side in range(4):
+		if (exposed_sides & (1 << side)) == 0:
+			continue
+		var start: int = edge_starts[side]
+		var end: int = edge_ends[side]
+		var bottom_start: Vector3 = top[start] + Vector3.DOWN * TILE_DEPTH
+		var bottom_end: Vector3 = top[end] + Vector3.DOWN * TILE_DEPTH
+		_add_ramp_quad(
+			surface, top[start], top[end], bottom_end, bottom_start, edge_normals[side]
+		)
+
+	var terrain_mesh: ArrayMesh = surface.commit()
+	_terrain_meshes[cache_key] = terrain_mesh
+	return terrain_mesh
+
+
+func _add_terrain_triangle(
+	surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3
+) -> void:
+	var normal: Vector3 = (b - a).cross(c - a).normalized()
+	if normal.y < 0.0:
+		normal = -normal
+	_add_ramp_triangle(surface, a, b, c, normal)
 
 
 func _add_ramp_quad(
