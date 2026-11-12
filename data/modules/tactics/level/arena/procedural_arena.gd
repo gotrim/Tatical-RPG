@@ -193,15 +193,19 @@ func _get_ramp_mesh(direction: Vector2i, rise: float) -> ArrayMesh:
 
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_add_ramp_triangle(surface, top[0], top[3], top[1], Vector3.UP)
-	_add_ramp_triangle(surface, top[1], top[3], top[2], Vector3.UP)
+	var ramp_normal := Vector3(
+		-direction.x * rise / TILE_SIZE,
+		1.0,
+		-direction.y * rise / TILE_SIZE
+	).normalized()
+	_add_ramp_triangle(surface, top[0], top[3], top[1], ramp_normal)
+	_add_ramp_triangle(surface, top[1], top[3], top[2], ramp_normal)
 	_add_ramp_triangle(surface, bottom[0], bottom[1], bottom[3], Vector3.DOWN)
 	_add_ramp_triangle(surface, bottom[1], bottom[2], bottom[3], Vector3.DOWN)
 	_add_ramp_quad(surface, top[0], top[1], bottom[1], bottom[0], Vector3.FORWARD)
 	_add_ramp_quad(surface, top[1], top[2], bottom[2], bottom[1], Vector3.RIGHT)
 	_add_ramp_quad(surface, top[2], top[3], bottom[3], bottom[2], Vector3.BACK)
 	_add_ramp_quad(surface, top[3], top[0], bottom[0], bottom[3], Vector3.LEFT)
-	surface.generate_normals()
 	var ramp_mesh: ArrayMesh = surface.commit()
 	_ramp_meshes[cache_key] = ramp_mesh
 	return ramp_mesh
@@ -230,6 +234,7 @@ func _add_ramp_triangle(
 		var swap: Vector3 = b
 		b = c
 		c = swap
+	surface.set_normal(outward.normalized())
 	surface.add_vertex(a)
 	surface.add_vertex(b)
 	surface.add_vertex(c)
@@ -242,6 +247,7 @@ func _get_material(height: float) -> StandardMaterial3D:
 
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.670588, 0.839216, 0.784314, 1.0)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.metallic_specular = 0.0
 	material.roughness = 0.0
 	_materials[height_band] = material
