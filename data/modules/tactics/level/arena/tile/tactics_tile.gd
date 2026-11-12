@@ -67,7 +67,7 @@ func get_tile_occupier() -> Object:
 	if raycasting:
 		return raycasting.get_object_above()
 	var standing_position: Vector3 = get_standing_position()
-	var query := PhysicsRayQueryParameters3D.create(
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
 		standing_position + Vector3.UP * 0.1,
 		standing_position + Vector3.UP * 1.6,
 		2
@@ -78,9 +78,18 @@ func get_tile_occupier() -> Object:
 ## Returns the position where a pawn should stand or swim on this tile.
 func get_standing_position() -> Vector3:
 	var standing_position: Vector3 = global_position
-	if float(get_meta("water_depth", 0.0)) > 0.0:
-		standing_position.y -= float(get_meta("water_submerge", 0.0))
+	if _get_meta_float(&"water_depth", 0.0) > 0.0:
+		standing_position.y -= _get_meta_float(&"water_submerge", 0.0)
 	return standing_position
+
+
+func _get_meta_float(meta_name: StringName, default_value: float) -> float:
+	var value: Variant = get_meta(meta_name, default_value)
+	if value is float:
+		return value
+	if value is int:
+		return float(value)
+	return default_value
 
 
 ## Return whether target tile is occupied
@@ -133,7 +142,7 @@ func configure_tile() -> void:
 	if tile:
 		base_material = tile.material_override
 	if not has_meta("chunked_terrain"):
-		var raycast_scene: Resource = load(
+		var raycast_scene: PackedScene = preload(
 			"res://data/modules/tactics/level/arena/tile/raycast/tile_raycasting.tscn"
 		)
 		add_child(raycast_scene.instantiate())
