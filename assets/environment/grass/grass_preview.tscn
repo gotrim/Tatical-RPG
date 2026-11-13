@@ -1,0 +1,123 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Shader" path="res://assets/environment/grass/Shaders/Grass.gdshader" id="1_grass_shader"]
+[ext_resource type="Shader" path="res://assets/environment/grass/Shaders/Floor.gdshader" id="2_floor_shader"]
+[ext_resource type="Texture2D" path="res://assets/environment/grass/textures/Albedo2Noise.tres" id="3_albedo2_noise"]
+[ext_resource type="Texture2D" path="res://assets/environment/grass/textures/Albedo3Noise.tres" id="4_albedo3_noise"]
+[ext_resource type="Texture2D" path="res://assets/environment/grass/textures/WindNoise.tres" id="5_wind_noise"]
+[ext_resource type="Texture2D" path="res://assets/environment/grass/textures/grassleaf.png" id="6_grass_texture"]
+[ext_resource type="Texture2D" path="res://assets/environment/grass/textures/accentleaf.png" id="7_accent_texture"]
+[ext_resource type="Script" path="res://assets/environment/grass/Scripts/LightDirection.gd" id="8_light_direction"]
+[ext_resource type="Environment" path="res://assets/environment/sky_environment.tres" id="9_environment"]
+[ext_resource type="Script" path="res://assets/environment/grass/Scripts/GrassPreview.gd" id="10_preview_script"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(25, 25)
+
+[sub_resource type="QuadMesh" id="QuadMesh_grass"]
+size = Vector2(0.2, 0.3)
+
+[sub_resource type="MultiMesh" id="MultiMesh_grass"]
+transform_format = 1
+instance_count = 30000
+visible_instance_count = 30000
+mesh = SubResource("QuadMesh_grass")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grass"]
+shader = ExtResource("1_grass_shader")
+shader_parameter/albedo_texture = ExtResource("6_grass_texture")
+shader_parameter/albedo1 = Color(0.443137, 0.635294, 0, 1)
+shader_parameter/albedo2 = Color(0.556863, 0.678431, 0.211765, 1)
+shader_parameter/albedo2_scale = 0.11
+shader_parameter/albedo2_threshold = 0.537
+shader_parameter/albedo2_noise = ExtResource("3_albedo2_noise")
+shader_parameter/albedo3 = Color(0.501961, 0.654902, 0.223529, 1)
+shader_parameter/albedo3_scale = 0.1
+shader_parameter/albedo3_threshold = 0.471
+shader_parameter/albedo3_noise = ExtResource("4_albedo3_noise")
+shader_parameter/accent_frequency1 = 0.001
+shader_parameter/accent_texture1 = ExtResource("6_grass_texture")
+shader_parameter/accent_albedo1 = Color(0.603922, 0.717647, 0, 1)
+shader_parameter/accent_height1 = 0.1
+shader_parameter/accent_scale1 = 1.0
+shader_parameter/accent_probability2 = 0.0001
+shader_parameter/accent_texture2 = ExtResource("7_accent_texture")
+shader_parameter/accent_albedo2 = Color(0.423529, 0.603922, 0, 1)
+shader_parameter/accent_height2 = 0.185
+shader_parameter/accent_scale2 = 1.0
+shader_parameter/framerate = 5.0
+shader_parameter/quantised = true
+shader_parameter/world_space_sway = true
+shader_parameter/world_sway_angle = 60.0
+shader_parameter/fake_perspective_scale = 0.3
+shader_parameter/wind_noise = ExtResource("5_wind_noise")
+shader_parameter/wind_noise_threshold = 0.365
+shader_parameter/wind_noise_scale = 0.071
+shader_parameter/wind_noise_speed = 0.025
+shader_parameter/wind_noise_direction = Vector2(0, 1)
+shader_parameter/noise_diverge_angle = 10.0
+shader_parameter/view_space_sway = true
+shader_parameter/view_sway_speed = 0.1
+shader_parameter/view_sway_angle = 10.0
+shader_parameter/character_displacement = false
+shader_parameter/cuts = 3
+shader_parameter/wrap = 0.0
+shader_parameter/steepness = 1.0
+shader_parameter/threshold_gradient_size = 0.255
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
+shader = ExtResource("2_floor_shader")
+shader_parameter/albedo1 = Color(0.14, 0.22, 0.08, 1)
+shader_parameter/albedo2 = Color(0.2, 0.3, 0.1, 1)
+shader_parameter/albedo2_noise = ExtResource("3_albedo2_noise")
+shader_parameter/albedo2_scale = 0.11
+shader_parameter/albedo2_threshold = 0.537
+shader_parameter/albedo3 = Color(0.26, 0.34, 0.13, 1)
+shader_parameter/albedo3_noise = ExtResource("4_albedo3_noise")
+shader_parameter/albedo3_scale = 0.1
+shader_parameter/albedo3_threshold = 0.471
+shader_parameter/cuts = 3
+shader_parameter/ambient_fill = 0.18
+
+[node name="GrassPreview" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("10_preview_script")
+
+[node name="ViewportContainer" type="SubViewportContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="ViewportContainer"]
+size = Vector2i(640, 360)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="ViewportContainer/SubViewport"]
+environment = ExtResource("9_environment")
+
+[node name="Camera3D" type="Camera3D" parent="ViewportContainer/SubViewport"]
+transform = Transform3D(0.582123, 0.304593, -0.753894, 0, 0.927184, 0.374607, 0.813101, -0.218067, 0.539735, -14.02, 5.975, 9.92)
+projection = 1
+size = 6.085
+current = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="ViewportContainer/SubViewport"]
+transform = Transform3D(0.994881, 0.0733036, -0.0695626, 0, 0.688354, 0.725375, 0.101056, -0.721661, 0.684831, 0, 3.81, 0)
+script = ExtResource("8_light_direction")
+shadow_enabled = true
+
+[node name="Floor" type="MeshInstance3D" parent="ViewportContainer/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 0.9958044, 0.09150724, 0, -0.09150724, 0.9958044, 0, -2.579859, 0)
+material_override = SubResource("ShaderMaterial_ground")
+mesh = SubResource("PlaneMesh_ground")
+
+[node name="Grass" type="MultiMeshInstance3D" parent="ViewportContainer/SubViewport/Floor"]
+material_override = SubResource("ShaderMaterial_grass")
+multimesh = SubResource("MultiMesh_grass")

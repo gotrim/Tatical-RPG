@@ -198,32 +198,37 @@ void vertex() {
 	float character_displacement_x = 0.0;
 	float character_displacement_y = 0.0;
 	// Calculate each character_position's influence on rotation, and add the values cumulatively
-	for (int i=0; i < character_count; i++) {
-		// Find distance between grass origin and character and scale radius based on character size value
-		float distance = length(character_positions[i].xyz - object_origin) / character_positions[i].w;
-		// Calculate strength and steepness of displacement
-		float displacement_strength = pow(1.0 - distance, radius_exponent);
+	if (character_displacement) {
+		for (int i = 0; i < character_count; i++) {
+			if (character_positions[i].w <= 0.0) {
+				continue;
+			}
 
-		// If a character is displacing the grass
-		if (displacement_strength > 0.0) {
-			// Clamp displacement influence
-			displacement_strength = clamp(displacement_strength, 0.0, 1.0);
+			// Find distance between grass origin and character and scale radius based on character size value
+			float distance = length(character_positions[i].xyz - object_origin) / character_positions[i].w;
+			// Calculate strength and steepness of displacement
+			float displacement_strength = pow(1.0 - distance, radius_exponent);
 
-			// Get direction from character to grass in world space
-			vec3 character_to_grass = object_origin - character_positions[i].xyz;
+			// If a character is displacing the grass
+			if (displacement_strength > 0.0) {
+				// Clamp displacement influence
+				displacement_strength = clamp(displacement_strength, 0.0, 1.0);
 
+				// Get direction from character to grass in world space
+				vec3 character_to_grass = object_origin - character_positions[i].xyz;
 
-			// Calculate how much to scale rotation in screen y axis based on alignment to camera's forward vector
-			float view_y_dot = dot(normalize(CAMERA_DIRECTION_WORLD.xz), normalize(character_to_grass.xz)); //-1.0 on top, 1.0 on bottom
-			// Same for x axis but using perpendicular vector
-			vec3 perpendicular_camera_direction_world = vec3(CAMERA_DIRECTION_WORLD.z, 0.0, -CAMERA_DIRECTION_WORLD.x); //1.0 on right, -1.0 on left
-			float view_x_dot = dot(normalize(perpendicular_camera_direction_world.xz), normalize(character_to_grass.xz));
+				// Calculate how much to scale rotation in screen y axis based on alignment to camera's forward vector
+				float view_y_dot = dot(normalize(CAMERA_DIRECTION_WORLD.xz), normalize(character_to_grass.xz)); // -1.0 on top, 1.0 on bottom
+				// Same for x axis but using perpendicular vector
+				vec3 perpendicular_camera_direction_world = vec3(CAMERA_DIRECTION_WORLD.z, 0.0, -CAMERA_DIRECTION_WORLD.x); // 1.0 on right, -1.0 on left
+				float view_x_dot = dot(normalize(perpendicular_camera_direction_world.xz), normalize(character_to_grass.xz));
 
-			// Cumulatively add together influences from each character
-			character_displacement_x += displacement_strength * view_x_dot;
-			character_displacement_y += displacement_strength * view_y_dot;
+				// Cumulatively add together influences from each character
+				character_displacement_x += displacement_strength * view_x_dot;
+				character_displacement_y += displacement_strength * view_y_dot;
 			}
 		}
+	}
 	// Clamp values to stop overrotating
 	character_displacement_x = clamp(character_displacement_x, -1.0, 1.0);
 	character_displacement_y = clamp(character_displacement_y, -1.0, 1.0);
