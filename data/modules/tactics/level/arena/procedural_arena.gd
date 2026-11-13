@@ -504,6 +504,7 @@ func _create_tile(
 		"water_submerge",
 		minf(water_depth * submerge_per_depth_unit, maximum_submerge)
 	)
+	tile.set_meta("marker_mesh_offset_y", 0.005 if is_ocean else 0.0)
 	tile.collision_layer = 0
 	tile.collision_mask = 0
 
@@ -776,6 +777,7 @@ func _get_grass_material() -> ShaderMaterial:
 	_grass_material.set_shader_parameter("cuts", 3)
 	_grass_material.set_shader_parameter("wrap", 0.0)
 	_grass_material.set_shader_parameter("steepness", 1.0)
+	_grass_material.set_shader_parameter("ambient_fill", 0.18)
 	_grass_material.set_shader_parameter("threshold_gradient_size", 0.255)
 	var empty_character_positions: Array[Vector4] = []
 	empty_character_positions.resize(64)
@@ -1138,6 +1140,7 @@ func _get_material(biome: int) -> ShaderMaterial:
 	material.set_shader_parameter("cuts", 3)
 	material.set_shader_parameter("wrap", 0.0)
 	material.set_shader_parameter("steepness", 1.0)
+	material.set_shader_parameter("ambient_fill", 0.18)
 	_materials[biome] = material
 	return material
 

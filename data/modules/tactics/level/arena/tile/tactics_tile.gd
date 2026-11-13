@@ -111,6 +111,9 @@ func _update_marker() -> void:
 	if not tile:
 		return
 	tile.visible = visible_as_floor or attackable or reachable or hover
+	if has_meta("chunked_terrain"):
+		var base_offset: float = float(get_meta("marker_mesh_offset_y", 0.0))
+		tile.position.y = base_offset + (0.02 if tile.visible else 0.0)
 	if hover:
 		if reachable:
 			tile.material_override = hover_reachable_mat

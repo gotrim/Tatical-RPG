@@ -69,6 +69,7 @@ uniform int cuts : hint_range(1, 8) = 3; // Number of lighting cuts in toon shad
 uniform float wrap : hint_range(-2.0f, 2.0f) = 0.0f; // Bias lighting
 uniform float steepness : hint_range(1.0f, 8.0f) = 1.0f; // Steepness of lighting
 uniform float threshold_gradient_size = 0.2; // Hybrid toon shading control (set to 0 for standard toon shading)
+uniform float ambient_fill : hint_range(0.0, 0.5, 0.01) = 0.18;
 
 varying float debug_wind_color;
 varying vec3 debug_interactive_color;
@@ -345,6 +346,7 @@ void fragment() {
 	//ALBEDO = vec3(distance1, -distance1, distance1);
 	ALBEDO = vec3(debug_interactive_color);
 	}
+	EMISSION = ALBEDO * ambient_fill;
 }
 
 void light() {

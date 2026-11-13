@@ -23,6 +23,7 @@ group_uniforms lighting;
 uniform int cuts : hint_range(1, 8) = 3;
 uniform float wrap : hint_range(-2.0f, 2.0f) = 0.0f;
 uniform float steepness : hint_range(1.0f, 8.0f) = 1.0f;
+uniform float ambient_fill : hint_range(0.0, 0.5, 0.01) = 0.18;
 
 varying vec3 vertex_pos;
 varying vec3 normal;
@@ -47,6 +48,7 @@ void fragment() {
 	} if (albedo3_noise_tex > albedo3_threshold) {
 		ALBEDO = albedo3.rgb;
 	}
+	EMISSION = ALBEDO * ambient_fill;
 }
 
 void light() {
