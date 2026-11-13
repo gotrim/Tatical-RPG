@@ -65,7 +65,7 @@ shader_parameter/character_displacement = false
 shader_parameter/cuts = 3
 shader_parameter/wrap = 0.0
 shader_parameter/steepness = 1.0
-shader_parameter/threshold_gradient_size = 0.255
+shader_parameter/threshold_gradient_size = 0.75
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
 shader = ExtResource("2_floor_shader")
@@ -80,6 +80,7 @@ shader_parameter/albedo3_scale = 0.1
 shader_parameter/albedo3_threshold = 0.471
 shader_parameter/cuts = 3
 shader_parameter/ambient_fill = 0.18
+shader_parameter/threshold_gradient_size = 0.75
 
 [node name="GrassPreview" type="Control"]
 layout_mode = 3
@@ -114,6 +115,7 @@ current = true
 transform = Transform3D(0.994881, 0.0733036, -0.0695626, 0, 0.688354, 0.725375, 0.101056, -0.721661, 0.684831, 0, 3.81, 0)
 script = ExtResource("8_light_direction")
 shadow_enabled = true
+shadow_blur = 1.0
 
 [node name="Floor" type="MeshInstance3D" parent="ViewportContainer/SubViewport"]
 transform = Transform3D(1, 0, 0, 0, 0.9958044, 0.09150724, 0, -0.09150724, 0.9958044, 0, -2.579859, 0)

@@ -26,7 +26,7 @@ cloud_diverge_angle = 20.0
 cloud_scale = 40.0
 cloud_speed = -0.01
 cloud_threshold = 0.27
-cloud_shadow_min = 0.2
+cloud_shadow_min = 0.45
 cloud_world_y = 50.0
 
 [node name="UI" type="Control" parent="."]

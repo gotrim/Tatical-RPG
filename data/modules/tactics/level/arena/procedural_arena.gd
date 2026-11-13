@@ -779,7 +779,7 @@ func _get_grass_material() -> ShaderMaterial:
 	_grass_material.set_shader_parameter("wrap", 0.0)
 	_grass_material.set_shader_parameter("steepness", 1.0)
 	_grass_material.set_shader_parameter("ambient_fill", 0.18)
-	_grass_material.set_shader_parameter("threshold_gradient_size", 0.255)
+	_grass_material.set_shader_parameter("threshold_gradient_size", 0.75)
 	var empty_character_positions: Array[Vector4] = []
 	empty_character_positions.resize(64)
 	for index: int in range(64):
@@ -1133,6 +1133,7 @@ func _get_material(biome: int) -> ShaderMaterial:
 	material.set_shader_parameter("wrap", 0.0)
 	material.set_shader_parameter("steepness", 1.0)
 	material.set_shader_parameter("ambient_fill", 0.18)
+	material.set_shader_parameter("threshold_gradient_size", 0.75)
 	_materials[biome] = material
 	return material
 

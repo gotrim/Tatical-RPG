@@ -36,7 +36,7 @@ extends Node
 		cloud_threshold = value
 		RenderingServer.global_shader_parameter_set("cloud_threshold", value)
 
-@export var cloud_shadow_min: float = 0.2:
+@export var cloud_shadow_min: float = 0.45:
 	set(value):
 		cloud_shadow_min = value
 		RenderingServer.global_shader_parameter_set("cloud_shadow_min", value)

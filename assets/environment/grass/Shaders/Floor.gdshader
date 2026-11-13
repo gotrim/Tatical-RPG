@@ -24,6 +24,7 @@ uniform int cuts : hint_range(1, 8) = 3;
 uniform float wrap : hint_range(-2.0f, 2.0f) = 0.0f;
 uniform float steepness : hint_range(1.0f, 8.0f) = 1.0f;
 uniform float ambient_fill : hint_range(0.0, 0.5, 0.01) = 0.18;
+uniform float threshold_gradient_size : hint_range(0.0, 1.0, 0.01) = 0.75;
 
 varying vec3 vertex_pos;
 varying vec3 normal;
@@ -71,7 +72,29 @@ void light() {
 	float original_stepped = clamp(original_index * cut, 0.0, 1.0);
 	float diffuse_stepped = clamp(diffuse_amount + mod(1.0f - diffuse_amount, cuts_inv), 0.0f, 1.0f);
 
-	diffuse_stepped = original_stepped;
+	if (threshold_gradient_size > 0.0) {
+		float nearest_k = floor(diffuse_amount / cut + 0.5);
+		float threshold = nearest_k * cut;
+
+		if (nearest_k >= 0.0 && nearest_k <= float(cuts)) {
+			float half_width = 0.5 * cut * threshold_gradient_size;
+			float low = max(0.0, threshold - half_width);
+			float high = min(1.0, threshold + half_width);
+			float blend = 0.0;
+			if (high > low) {
+				blend = smoothstep(low, high, diffuse_amount);
+			} else {
+				blend = step(threshold, diffuse_amount);
+			}
+			float right_value = min(threshold + cut, 1.0);
+			diffuse_stepped = clamp(mix(threshold, right_value, blend), 0.0, 1.0);
+		} else {
+			diffuse_stepped = original_stepped;
+		}
+	} else {
+		diffuse_stepped = original_stepped;
+	}
+
 	vec3 diffuse = ALBEDO.rgb * LIGHT_COLOR / PI;
 	diffuse *= diffuse_stepped;
 	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, diffuse);

@@ -185,7 +185,7 @@ light_direction={
 }
 cloud_shadow_min={
 "type": "float",
-"value": 0.2
+"value": 0.45
 }
 cloud_diverge_angle={
 "type": "float",
