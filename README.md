@@ -54,3 +54,4 @@ Contribuições e relatos de problemas são bem-vindos. Para manter o projeto si
 - TutsByKai
 - AdamCYounis
 - Comunidade da Godot, fóruns e Stack Overflow
+- Grass shaders and art assets by Dylearn (MIT and CC BY 4.0; see [license](./assets/environment/grass/LICENSE.txt)). The sky environment was created for this project.

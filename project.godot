@@ -149,6 +149,49 @@ controller_hints={
 ]
 }
 
+[shader_globals]
+
+cloud_contrast={
+"type": "float",
+"value": 3.845
+}
+cloud_scale={
+"type": "float",
+"value": 40.0
+}
+cloud_speed={
+"type": "float",
+"value": -0.01
+}
+cloud_threshold={
+"type": "float",
+"value": 0.27
+}
+cloud_world_y={
+"type": "float",
+"value": 50.0
+}
+cloud_noise={
+"type": "sampler2D",
+"value": "res://assets/environment/grass/textures/Cloud_Noise.tres"
+}
+cloud_direction={
+"type": "vec2",
+"value": Vector2(0, -1)
+}
+light_direction={
+"type": "vec3",
+"value": Vector3(0, 0.707107, 0.707107)
+}
+cloud_shadow_min={
+"type": "float",
+"value": 0.2
+}
+cloud_diverge_angle={
+"type": "float",
+"value": 20.0
+}
+
 [rendering]
 
 renderer/rendering_method="mobile"

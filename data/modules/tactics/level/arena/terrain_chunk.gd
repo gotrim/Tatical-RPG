@@ -11,7 +11,7 @@ func configure(
 	collision_mesh: ArrayMesh,
 	owner_arena: TacticsArena,
 	grass_multimesh: MultiMesh,
-	grass_material: Material
+	grass_material: ShaderMaterial
 ) -> void:
 	name = chunk_name
 	position = chunk_position
