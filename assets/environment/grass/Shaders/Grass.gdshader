@@ -9,6 +9,7 @@ render_mode depth_prepass_alpha, depth_draw_opaque; //, cull_disabled;
 group_uniforms colours_and_textures;
 uniform sampler2D albedo_texture : source_color, filter_nearest; // Sprite for main grass quad
 uniform vec4 albedo1 : source_color = vec4(1.0f); // Colour for main grass quad
+uniform bool match_instance_color = false;
 
 	group_uniforms colours_and_textures.albedo2;
 uniform vec4 albedo2 : source_color = vec4(1.0f); // Colour for grass patch 2
@@ -338,7 +339,11 @@ void fragment() {
 		albedo_tex = texture(accent_texture2, uv);
 		ALBEDO = accent_albedo2.rgb * albedo_tex.rgb;
 	}
-	ALBEDO *= multimesh_color.rgb;
+	if (match_instance_color) {
+		ALBEDO = multimesh_color.rgb;
+	} else {
+		ALBEDO *= multimesh_color.rgb;
+	}
 
 	LIGHT_VERTEX = model_origin;
 	ALPHA = albedo_tex.a;

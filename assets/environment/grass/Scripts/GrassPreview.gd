@@ -1,5 +1,7 @@
 extends Control
 
+const TILE_COLOR := Color(0.48, 0.64, 0.32, 1.0)
+
 @onready var grass: MultiMeshInstance3D = $ViewportContainer/SubViewport/Floor/Grass
 
 
@@ -20,3 +22,4 @@ func _ready() -> void:
 			)
 		)
 		multimesh.set_instance_transform(index, blade_transform)
+		multimesh.set_instance_color(index, TILE_COLOR)

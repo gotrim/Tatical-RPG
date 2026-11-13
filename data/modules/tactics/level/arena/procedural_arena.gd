@@ -631,7 +631,7 @@ func _build_chunk_meshes(
 			)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
-			var grass_tint: Color = _get_grass_color(biomes[index])
+			var grass_tint: Color = _get_biome_color(biomes[index])
 			for clump_index: int in range(grass_clumps_per_tile):
 				var offset := Vector2(
 					rng.randf_range(-0.5, 0.5),
@@ -736,6 +736,7 @@ func _get_grass_material() -> ShaderMaterial:
 		return _grass_material
 	_grass_material = ShaderMaterial.new()
 	_grass_material.shader = GRASS_SHADER
+	_grass_material.set_shader_parameter("match_instance_color", true)
 	_grass_material.set_shader_parameter("albedo_texture", GRASS_TEXTURE)
 	_grass_material.set_shader_parameter("albedo1", Color(0.443137, 0.635294, 0.0))
 	_grass_material.set_shader_parameter("albedo2", Color(0.556863, 0.678431, 0.211765))
@@ -789,16 +790,18 @@ func _get_grass_material() -> ShaderMaterial:
 	return _grass_material
 
 
-func _get_grass_color(biome: int) -> Color:
+func _get_biome_color(biome: int) -> Color:
 	match biome:
+		Biome.OCEAN:
+			return ocean_floor_color
 		Biome.DESERT:
-			return desert_color.lerp(Color(0.95, 0.82, 0.48), 0.45)
+			return desert_color
 		Biome.SNOWY_TUNDRA:
-			return snowy_tundra_color.lerp(Color.WHITE, 0.2)
+			return snowy_tundra_color
 		Biome.FOREST:
-			return forest_color.lerp(Color(0.48, 0.76, 0.28), 0.4)
+			return forest_color
 		_:
-			return plains_color.lerp(Color(0.78, 0.88, 0.38), 0.3)
+			return plains_color
 
 
 func _get_chunk_surface_tool(
@@ -1114,26 +1117,15 @@ func _get_material(biome: int) -> ShaderMaterial:
 	if _materials.has(biome):
 		return _materials[biome] as ShaderMaterial
 
-	var base_color: Color
-	match biome:
-		Biome.OCEAN:
-			base_color = ocean_floor_color
-		Biome.DESERT:
-			base_color = desert_color
-		Biome.SNOWY_TUNDRA:
-			base_color = snowy_tundra_color
-		Biome.FOREST:
-			base_color = forest_color
-		_:
-			base_color = plains_color
+	var base_color: Color = _get_biome_color(biome)
 	var material := ShaderMaterial.new()
 	material.shader = FLOOR_SHADER
 	material.set_shader_parameter("albedo1", base_color)
-	material.set_shader_parameter("albedo2", base_color.lightened(0.16))
+	material.set_shader_parameter("albedo2", base_color)
 	material.set_shader_parameter("albedo2_noise", ALBEDO2_NOISE)
 	material.set_shader_parameter("albedo2_scale", 0.11)
 	material.set_shader_parameter("albedo2_threshold", 0.537)
-	material.set_shader_parameter("albedo3", base_color.lightened(0.09))
+	material.set_shader_parameter("albedo3", base_color)
 	material.set_shader_parameter("albedo3_noise", ALBEDO3_NOISE)
 	material.set_shader_parameter("albedo3_scale", 0.1)
 	material.set_shader_parameter("albedo3_threshold", 0.471)
