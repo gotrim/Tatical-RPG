@@ -17,6 +17,7 @@ uniform int character_count = 0;
 
 varying vec3 node_pos_view;
 varying vec3 node_pos_world;
+varying vec4 multimesh_color;
 
 vec4 CalculateWind(vec4 uv, float speed, vec3 rotate_direction, float uv_scale, float mip_level){
 
@@ -44,6 +45,7 @@ vec3 CalculateCharacterDisplacement(vec3 world_position) {
 }
 
 void vertex() {
+	multimesh_color = COLOR;
 	// Varyings
 	node_pos_view = NODE_POSITION_VIEW;
 	node_pos_world = NODE_POSITION_WORLD;
@@ -97,7 +99,7 @@ void fragment() {
 	noise = (noise + 2.5) / 3.5;
 	noise = ceil(noise * 5.0) / 5.0;
 
-	ALBEDO = grass_color.rgb * noise;
+	ALBEDO = grass_color.rgb * multimesh_color.rgb * noise;
 	ALPHA = texture(grass_alpha, UV).r;
 	ALPHA_SCISSOR_THRESHOLD = 0.75;
 

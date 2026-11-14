@@ -18,6 +18,7 @@ const TALL_GRASS_MATERIAL: ShaderMaterial = preload(
 const FLOWER_MATERIAL: ShaderMaterial = preload(
 	"res://assets/environment/vegetation/materials/flower.tres"
 )
+const DEFAULT_GRASS_COLOR: Color = Color(0.101960786, 0.6901961, 0.21176471)
 
 @export_range(0, 32, 1) var clumps_per_tile: int = 7
 @export var world_seed: int = 42
@@ -43,9 +44,12 @@ func _populate() -> void:
 			excluded_rids.append(body.get_rid())
 
 	var grass_transforms: Array[Transform3D] = []
+	var grass_colors: Array[Color] = []
 	var tall_grass_transforms: Array[Transform3D] = []
+	var tall_grass_colors: Array[Color] = []
 	var flower_transforms: Array[Transform3D] = []
 	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var world_to_local: Transform3D = global_transform.affine_inverse()
 	for tile: Node in tiles.get_children():
 		if not tile is TacticsTile:
 			continue
@@ -83,15 +87,19 @@ func _populate() -> void:
 			var grass_basis := (
 				surface_basis * Basis(Vector3.UP, rotation)
 			).scaled(Vector3.ONE * rng.randf_range(1.2, 1.8))
-			grass_transforms.append(_to_local_transform(world_position, grass_basis))
+			grass_transforms.append(
+				_to_local_transform(world_position, grass_basis, world_to_local)
+			)
+			grass_colors.append(DEFAULT_GRASS_COLOR)
 
 			if rng.randf() < 0.04:
 				var tall_basis := (
 					surface_basis * Basis(Vector3.UP, rotation)
 				).scaled(Vector3.ONE * rng.randf_range(1.8, 2.4))
 				tall_grass_transforms.append(
-					_to_local_transform(world_position, tall_basis)
+					_to_local_transform(world_position, tall_basis, world_to_local)
 				)
+				tall_grass_colors.append(DEFAULT_GRASS_COLOR)
 
 			if rng.randf() < 0.0035:
 				var flower_basis := (
@@ -99,35 +107,48 @@ func _populate() -> void:
 					* Basis(Vector3.UP, rng.randf_range(0.0, TAU))
 				).scaled(Vector3.ONE * rng.randf_range(0.7, 1.3))
 				flower_transforms.append(
-					_to_local_transform(world_position, flower_basis)
+					_to_local_transform(world_position, flower_basis, world_to_local)
 				)
 
-	_add_multimesh("Grass", grass_transforms, GRASS_MESH, GRASS_MATERIAL)
 	_add_multimesh(
-		"TallGrass", tall_grass_transforms, TALL_GRASS_MESH, TALL_GRASS_MATERIAL
+		"Grass", grass_transforms, GRASS_MESH, GRASS_MATERIAL, grass_colors
+	)
+	_add_multimesh(
+		"TallGrass",
+		tall_grass_transforms,
+		TALL_GRASS_MESH,
+		TALL_GRASS_MATERIAL,
+		tall_grass_colors
 	)
 	_add_multimesh("Flowers", flower_transforms, FLOWER_MESH, FLOWER_MATERIAL)
 
 
-func _to_local_transform(world_position: Vector3, world_basis: Basis) -> Transform3D:
-	var local_basis: Basis = global_transform.basis.inverse() * world_basis
-	return Transform3D(local_basis, to_local(world_position))
+func _to_local_transform(
+	world_position: Vector3,
+	world_basis: Basis,
+	world_to_local: Transform3D
+) -> Transform3D:
+	return world_to_local * Transform3D(world_basis, world_position)
 
 
 func _add_multimesh(
 	instance_name: String,
 	transforms: Array[Transform3D],
 	mesh: ArrayMesh,
-	material: ShaderMaterial
+	material: ShaderMaterial,
+	colors: Array[Color] = []
 ) -> void:
 	if transforms.is_empty():
 		return
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = not colors.is_empty()
 	multimesh.mesh = mesh
 	multimesh.instance_count = transforms.size()
 	for index: int in range(transforms.size()):
 		multimesh.set_instance_transform(index, transforms[index])
+		if multimesh.use_colors:
+			multimesh.set_instance_color(index, colors[index])
 
 	var instance := MultiMeshInstance3D.new()
 	instance.name = instance_name

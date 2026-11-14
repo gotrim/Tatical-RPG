@@ -5,9 +5,24 @@ var chunks: Array[TacticsTerrainChunk] = []
 var _grass_material: ShaderMaterial
 var _tall_grass_material: ShaderMaterial
 var _character_update_timer: float = 0.0
+var _pawns: Array[TacticsPawn] = []
+var _character_positions: Array[Vector4] = []
 
 const MAX_GRASS_CHARACTERS: int = 64
 const GRASS_DISPLACEMENT_RADIUS: float = 1.2
+
+
+func _ready() -> void:
+	var scene_tree: SceneTree = get_tree()
+	scene_tree.node_added.connect(_on_node_added)
+	scene_tree.node_removed.connect(_on_node_removed)
+	_character_positions.resize(MAX_GRASS_CHARACTERS)
+	for index: int in range(MAX_GRASS_CHARACTERS):
+		_character_positions[index] = Vector4.ZERO
+	for node: Node in scene_tree.root.find_children(
+		"*", "CharacterBody3D", true, false
+	):
+		_register_pawn(node)
 
 
 func add_chunk(
@@ -43,20 +58,13 @@ func _process(delta: float) -> void:
 		return
 	_character_update_timer = 0.1
 
-	var character_positions: Array[Vector4] = []
-	character_positions.resize(MAX_GRASS_CHARACTERS)
 	for index: int in range(MAX_GRASS_CHARACTERS):
-		character_positions[index] = Vector4.ZERO
-
-	var character_nodes: Array[Node] = get_tree().root.find_children(
-		"*", "CharacterBody3D", true, false
-	)
+		_character_positions[index] = Vector4.ZERO
 	var character_index: int = 0
-	for character: Node in character_nodes:
-		if not character is TacticsPawn:
+	for pawn: TacticsPawn in _pawns:
+		if not is_instance_valid(pawn):
 			continue
-		var pawn: TacticsPawn = character
-		character_positions[character_index] = Vector4(
+		_character_positions[character_index] = Vector4(
 			pawn.global_position.x,
 			pawn.global_position.y,
 			pawn.global_position.z,
@@ -66,10 +74,28 @@ func _process(delta: float) -> void:
 		if character_index >= MAX_GRASS_CHARACTERS:
 			break
 
-	_set_character_positions(_grass_material, character_positions, character_index)
 	_set_character_positions(
-		_tall_grass_material, character_positions, character_index
+		_grass_material, _character_positions, character_index
 	)
+	_set_character_positions(
+		_tall_grass_material, _character_positions, character_index
+	)
+
+
+func _on_node_added(node: Node) -> void:
+	_register_pawn(node)
+
+
+func _on_node_removed(node: Node) -> void:
+	var pawn := node as TacticsPawn
+	if pawn:
+		_pawns.erase(pawn)
+
+
+func _register_pawn(node: Node) -> void:
+	var pawn := node as TacticsPawn
+	if pawn and not _pawns.has(pawn):
+		_pawns.append(pawn)
 
 
 func _set_character_positions(

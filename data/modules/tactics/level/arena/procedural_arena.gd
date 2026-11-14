@@ -52,7 +52,7 @@ const GROUND_SHADER: Shader = preload(
 @export var desert_color: Color = Color(0.72, 0.59, 0.34)
 @export var snowy_tundra_color: Color = Color(0.82, 0.87, 0.90)
 @export var forest_color: Color = Color(0.18, 0.39, 0.20)
-@export var plains_color: Color = Color(0.48, 0.64, 0.32)
+@export var plains_color: Color = Color(0.101960786, 0.6901961, 0.21176471)
 
 @export_group("Oceano")
 @export var ocean_surface_height: float = 0.0
@@ -568,7 +568,9 @@ func _build_chunk_meshes(
 ) -> Dictionary:
 	var render_tools: Dictionary = {}
 	var grass_transforms: Array[Transform3D] = []
+	var grass_colors: Array[Color] = []
 	var tall_grass_transforms: Array[Transform3D] = []
+	var tall_grass_colors: Array[Color] = []
 	var flower_transforms: Array[Transform3D] = []
 	var water_tool: SurfaceTool
 	var collision_tool := SurfaceTool.new()
@@ -632,6 +634,7 @@ func _build_chunk_meshes(
 			)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
+			var biome_grass_color: Color = _get_biome_color(biomes[index])
 			for clump_index: int in range(grass_clumps_per_tile):
 				var offset := Vector2(
 					rng.randf_range(-0.5, 0.5),
@@ -653,6 +656,7 @@ func _build_chunk_meshes(
 					align_to_surface * Basis(Vector3.UP, base_angle)
 				).scaled(Vector3.ONE * grass_scale)
 				grass_transforms.append(Transform3D(grass_basis, grass_position))
+				grass_colors.append(biome_grass_color)
 
 				if rng.randf() < 0.04:
 					var tall_scale: float = rng.randf_range(1.8, 2.4)
@@ -662,6 +666,7 @@ func _build_chunk_meshes(
 					tall_grass_transforms.append(
 						Transform3D(tall_basis, grass_position)
 					)
+					tall_grass_colors.append(biome_grass_color)
 
 				if rng.randf() < 0.0035:
 					var flower_scale: float = rng.randf_range(0.7, 1.3)
@@ -683,9 +688,11 @@ func _build_chunk_meshes(
 	return {
 		"render": render_mesh,
 		"collision": collision_tool.commit(),
-		"grass": _build_multimesh(grass_transforms, GRASS_PLANE_MESH),
+		"grass": _build_multimesh(
+			grass_transforms, GRASS_PLANE_MESH, grass_colors
+		),
 		"tall_grass": _build_multimesh(
-			tall_grass_transforms, TALL_GRASS_PLANE_MESH
+			tall_grass_transforms, TALL_GRASS_PLANE_MESH, tall_grass_colors
 		),
 		"flowers": _build_multimesh(flower_transforms, FLOWER_MESH)
 	}
@@ -724,15 +731,22 @@ func _get_tile_surface_normal(
 	return normal if normal.y >= 0.0 else -normal
 
 
-func _build_multimesh(transforms: Array[Transform3D], mesh: Mesh) -> MultiMesh:
+func _build_multimesh(
+	transforms: Array[Transform3D],
+	mesh: Mesh,
+	colors: Array[Color] = []
+) -> MultiMesh:
 	if transforms.is_empty():
 		return null
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = not colors.is_empty()
 	multimesh.mesh = mesh
 	multimesh.instance_count = transforms.size()
 	for index in range(transforms.size()):
 		multimesh.set_instance_transform(index, transforms[index])
+		if multimesh.use_colors:
+			multimesh.set_instance_color(index, colors[index])
 	return multimesh
 
 
