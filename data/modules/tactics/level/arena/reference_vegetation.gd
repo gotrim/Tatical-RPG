@@ -55,25 +55,30 @@ func _populate() -> void:
 			roundi(tile.position.y),
 			roundi(tile.position.z)
 		))
+		var sample_origin: Vector3 = tile.global_position + Vector3.UP * 50.0
+		var query := PhysicsRayQueryParameters3D.create(
+			sample_origin,
+			sample_origin + Vector3.DOWN * 100.0,
+			1,
+			excluded_rids
+		)
+		var hit: Dictionary = space_state.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		var surface_position: Vector3 = hit.position
+		var surface_normal: Vector3 = hit.normal
+		var surface_basis := Basis(Quaternion(Vector3.UP, surface_normal))
 		for _clump_index: int in range(clumps_per_tile):
 			var sample_x: float = rng.randf_range(-0.42, 0.42)
 			var sample_z: float = rng.randf_range(-0.42, 0.42)
-			var sample_origin: Vector3 = tile.global_position + Vector3(
-				sample_x, 50.0, sample_z
+			var world_position: Vector3 = surface_position + Vector3(
+				sample_x, 0.0, sample_z
 			)
-			var query := PhysicsRayQueryParameters3D.create(
-				sample_origin,
-				sample_origin + Vector3.DOWN * 100.0,
-				1,
-				excluded_rids
-			)
-			var hit: Dictionary = space_state.intersect_ray(query)
-			if hit.is_empty():
-				continue
-
-			var world_position: Vector3 = hit.position
-			var surface_normal: Vector3 = hit.normal
-			var surface_basis := Basis(Quaternion(Vector3.UP, surface_normal))
+			if absf(surface_normal.y) > 0.001:
+				world_position.y -= (
+					surface_normal.x * sample_x
+					+ surface_normal.z * sample_z
+				) / surface_normal.y
 			var rotation: float = rng.randf_range(0.0, TAU)
 			var grass_basis := (
 				surface_basis * Basis(Vector3.UP, rotation)
