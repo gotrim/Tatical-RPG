@@ -149,6 +149,10 @@ controller_hints={
 ]
 }
 
+[rendering]
+
+renderer/rendering_method="mobile"
+
 [shader_globals]
 
 cloud_contrast={
@@ -211,7 +215,3 @@ wind_strength={
 "type": "float",
 "value": 0.4
 }
-
-[rendering]
-
-renderer/rendering_method="mobile"
