@@ -3,6 +3,7 @@ extends Node3D
 
 var chunks: Array[TacticsTerrainChunk] = []
 var _grass_material: ShaderMaterial
+var _tall_grass_material: ShaderMaterial
 var _character_update_timer: float = 0.0
 
 const MAX_GRASS_CHARACTERS: int = 64
@@ -16,13 +17,19 @@ func add_chunk(
 	collision_mesh: ArrayMesh,
 	arena: TacticsArena,
 	grass_multimesh: MultiMesh,
-	grass_material: ShaderMaterial
+	grass_material: ShaderMaterial,
+	tall_grass_multimesh: MultiMesh,
+	tall_grass_material: ShaderMaterial,
+	flower_multimesh: MultiMesh,
+	flower_material: ShaderMaterial
 ) -> void:
 	_grass_material = grass_material
+	_tall_grass_material = tall_grass_material
 	var chunk := TacticsTerrainChunk.new()
 	chunk.configure(
 		chunk_name, chunk_position, render_mesh, collision_mesh, arena,
-		grass_multimesh, grass_material
+		grass_multimesh, grass_material, tall_grass_multimesh,
+		tall_grass_material, flower_multimesh, flower_material
 	)
 	add_child(chunk)
 	chunks.append(chunk)
@@ -58,7 +65,22 @@ func _process(delta: float) -> void:
 		character_index += 1
 		if character_index >= MAX_GRASS_CHARACTERS:
 			break
-	_grass_material.set_shader_parameter("character_positions", character_positions)
+
+	_set_character_positions(_grass_material, character_positions, character_index)
+	_set_character_positions(
+		_tall_grass_material, character_positions, character_index
+	)
+
+
+func _set_character_positions(
+	material: ShaderMaterial,
+	character_positions: Array[Vector4],
+	character_count: int
+) -> void:
+	if not material:
+		return
+	material.set_shader_parameter("character_positions", character_positions)
+	material.set_shader_parameter("character_count", character_count)
 
 
 func clear_chunks() -> void:

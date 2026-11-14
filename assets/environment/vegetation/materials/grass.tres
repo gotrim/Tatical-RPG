@@ -1,0 +1,13 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+
+[ext_resource type="Shader" path="res://assets/environment/vegetation/shaders/grass_billboard.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" path="res://assets/environment/vegetation/textures/grass_round.png" id="2_alpha"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/grass_color = Color(0.101960786, 0.6901961, 0.21176471, 1)
+shader_parameter/grass_alpha = ExtResource("2_alpha")
+shader_parameter/grass_bend_amount = 1.0
+shader_parameter/sway_back = 1.0
+shader_parameter/light_steps = 3.0

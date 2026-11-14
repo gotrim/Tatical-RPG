@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://data/main.gd" id="1_pra24"]
 [ext_resource type="PackedScene" uid="uid://1ujfoei6r514" path="res://data/modules/tactics/camera/camera.tscn" id="2_j6uwt"]
 [ext_resource type="PackedScene" uid="uid://bky8ul2628kxw" path="res://data/modules/tactics/controls/controls.tscn" id="3_swndv"]
-[ext_resource type="Environment" path="res://assets/environment/sky_environment.tres" id="4_sky"]
+[ext_resource type="Environment" path="res://assets/environment/reference_sky_environment.tres" id="4_sky"]
 [ext_resource type="Script" path="res://assets/environment/grass/Scripts/ShaderGlobals.gd" id="5_shader_globals"]
 
 [sub_resource type="ImageTexture" id="ImageTexture_sa2p4"]

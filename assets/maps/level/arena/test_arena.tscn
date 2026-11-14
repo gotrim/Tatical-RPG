@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://data/modules/tactics/level/arena/tactics_arena.gd" id="1_yiy0p"]
 [ext_resource type="Script" path="res://assets/environment/grass/Scripts/LightDirection.gd" id="2_light_direction"]
+[ext_resource type="Script" path="res://data/modules/tactics/level/arena/reference_vegetation.gd" id="3_vegetation"]
 
 [sub_resource type="ArrayMesh" id="2"]
 resource_name = "Cube005"
@@ -2826,7 +2827,9 @@ roughness = 0.0
 script = ExtResource("1_yiy0p")
 
 [node name="s" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.707107, 0.5, -0.5, 0, 0.707107, 0.707107, 0.707107, -0.5, 0.5, 0, 4, 0)
+transform = Transform3D(0.98618174, -0.093293354, 0.1369013, 0, 0.82636356, 0.56313676, -0.16566719, -0.5553552, 0.8149447, 0, 4.540125, -5.9411197)
+light_color = Color(1, 0.685, 0.37, 1)
+light_energy = 1.2
 light_indirect_energy = 0.0
 light_volumetric_fog_energy = 0.0
 shadow_enabled = true
@@ -2836,6 +2839,9 @@ script = ExtResource("2_light_direction")
 
 [node name="Tiles" type="Node3D" parent="."]
 visible = false
+
+[node name="ReferenceVegetation" type="Node3D" parent="."]
+script = ExtResource("3_vegetation")
 
 [node name="Tile" type="MeshInstance3D" parent="Tiles"]
 transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, -3.50836, 4.5, 1.5)

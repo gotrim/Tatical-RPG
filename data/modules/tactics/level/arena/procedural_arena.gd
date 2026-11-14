@@ -13,29 +13,26 @@ enum Biome { OCEAN, DESERT, SNOWY_TUNDRA, FOREST, PLAINS }
 const TERRAIN_CHUNK_MANAGER_SCRIPT = preload(
 	"res://data/modules/tactics/level/arena/terrain_chunk_manager.gd"
 )
-const GRASS_PLANE_MESH: Mesh = preload(
-	"res://assets/environment/grass/grass_blade_mesh.tres"
+const GRASS_PLANE_MESH: ArrayMesh = preload(
+	"res://assets/environment/vegetation/meshes/grass_plane_mesh.res"
 )
-const GRASS_TEXTURE: Texture2D = preload(
-	"res://assets/environment/grass/textures/grassleaf.png"
+const TALL_GRASS_PLANE_MESH: ArrayMesh = preload(
+	"res://assets/environment/vegetation/meshes/grassTall_plane_mesh.res"
 )
-const ACCENT_GRASS_TEXTURE: Texture2D = preload(
-	"res://assets/environment/grass/textures/accentleaf.png"
+const FLOWER_MESH: ArrayMesh = preload(
+	"res://assets/environment/vegetation/meshes/flower.res"
 )
-const ALBEDO2_NOISE: Texture2D = preload(
-	"res://assets/environment/grass/textures/Albedo2Noise.tres"
+const GRASS_MATERIAL: ShaderMaterial = preload(
+	"res://assets/environment/vegetation/materials/grass.tres"
 )
-const ALBEDO3_NOISE: Texture2D = preload(
-	"res://assets/environment/grass/textures/Albedo3Noise.tres"
+const TALL_GRASS_MATERIAL: ShaderMaterial = preload(
+	"res://assets/environment/vegetation/materials/grass_tall.tres"
 )
-const WIND_NOISE: Texture2D = preload(
-	"res://assets/environment/grass/textures/WindNoise.tres"
+const FLOWER_MATERIAL: ShaderMaterial = preload(
+	"res://assets/environment/vegetation/materials/flower.tres"
 )
-const GRASS_SHADER: Shader = preload(
-	"res://assets/environment/grass/Shaders/Grass.gdshader"
-)
-const FLOOR_SHADER: Shader = preload(
-	"res://assets/environment/grass/Shaders/Floor.gdshader"
+const GROUND_SHADER: Shader = preload(
+	"res://assets/environment/vegetation/shaders/ground_shader.gdshader"
 )
 
 @export_group("Geração de terreno")
@@ -71,7 +68,7 @@ const FLOOR_SHADER: Shader = preload(
 @export_range(0.25, 2.0, 0.25) var ramp_max_height_difference: float = 0.75
 @export_range(2, 8, 1) var ramp_max_length_tiles: int = 4
 @export_range(0.25, 2.0, 0.25) var ramp_min_total_rise: float = 0.5
-@export_range(0, 32, 1) var grass_clumps_per_tile: int = 16
+@export_range(0, 32, 1) var grass_clumps_per_tile: int = 7
 
 var _continentality_noise: FastNoiseLite = FastNoiseLite.new()
 var _erosion_noise: FastNoiseLite = FastNoiseLite.new()
@@ -80,7 +77,6 @@ var _moisture_noise: FastNoiseLite = FastNoiseLite.new()
 var _water_surface_mesh: PlaneMesh = PlaneMesh.new()
 var _water_material: StandardMaterial3D
 var _materials: Dictionary = {}
-var _grass_material: ShaderMaterial
 var _terrain_meshes: Dictionary = {}
 var _terrain_chunk_manager: Node3D
 var _ramp_directions: Array[Vector2i] = []
@@ -554,7 +550,11 @@ func _build_terrain_chunks(
 				meshes.collision,
 				self,
 				meshes.grass,
-				_get_grass_material()
+				GRASS_MATERIAL,
+				meshes.tall_grass,
+				TALL_GRASS_MATERIAL,
+				meshes.flowers,
+				FLOWER_MATERIAL
 			)
 
 
@@ -568,7 +568,8 @@ func _build_chunk_meshes(
 ) -> Dictionary:
 	var render_tools: Dictionary = {}
 	var grass_transforms: Array[Transform3D] = []
-	var grass_colors: Array[Color] = []
+	var tall_grass_transforms: Array[Transform3D] = []
+	var flower_transforms: Array[Transform3D] = []
 	var water_tool: SurfaceTool
 	var collision_tool := SurfaceTool.new()
 	collision_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -631,7 +632,6 @@ func _build_chunk_meshes(
 			)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(Vector3i(x + world_seed, z, biomes[index]))
-			var grass_tint: Color = _get_biome_color(biomes[index])
 			for clump_index: int in range(grass_clumps_per_tile):
 				var offset := Vector2(
 					rng.randf_range(-0.5, 0.5),
@@ -647,23 +647,31 @@ func _build_chunk_meshes(
 					corner_heights, tile_progress
 				)
 				var base_angle: float = rng.randf_range(0.0, TAU)
-				var grass_height_scale: float = rng.randf_range(1.2, 1.8)
-				if rng.randf() < 0.25:
-					grass_height_scale = rng.randf_range(1.8, 2.4)
-				var grass_scale := Vector3(
-					rng.randf_range(0.9, 1.2),
-					grass_height_scale,
-					1.0
-				)
 				var align_to_surface := Basis(Quaternion(Vector3.UP, grass_normal))
-				for crossing: int in range(2):
-					var grass_basis := (
+				var grass_scale: float = rng.randf_range(1.2, 1.8)
+				var grass_basis := (
+					align_to_surface * Basis(Vector3.UP, base_angle)
+				).scaled(Vector3.ONE * grass_scale)
+				grass_transforms.append(Transform3D(grass_basis, grass_position))
+
+				if rng.randf() < 0.04:
+					var tall_scale: float = rng.randf_range(1.8, 2.4)
+					var tall_basis := (
+						align_to_surface * Basis(Vector3.UP, base_angle)
+					).scaled(Vector3.ONE * tall_scale)
+					tall_grass_transforms.append(
+						Transform3D(tall_basis, grass_position)
+					)
+
+				if rng.randf() < 0.0035:
+					var flower_scale: float = rng.randf_range(0.7, 1.3)
+					var flower_basis := (
 						align_to_surface
-						* Basis(Vector3.UP, base_angle + float(crossing) * PI / 2.0)
-					).scaled(grass_scale)
-					var grass_transform := Transform3D(grass_basis, grass_position)
-					grass_transforms.append(grass_transform)
-					grass_colors.append(grass_tint)
+						* Basis(Vector3.UP, rng.randf_range(0.0, TAU))
+					).scaled(Vector3.ONE * flower_scale)
+					flower_transforms.append(
+						Transform3D(flower_basis, grass_position)
+					)
 
 	var render_mesh := ArrayMesh.new()
 	for biome_id: int in render_tools:
@@ -672,13 +680,14 @@ func _build_chunk_meshes(
 		)
 	if water_tool:
 		_append_surface_tool(render_mesh, water_tool, _get_water_material())
-	var grass_multimesh: MultiMesh = _build_grass_multimesh(
-		grass_transforms, grass_colors
-	)
 	return {
 		"render": render_mesh,
 		"collision": collision_tool.commit(),
-		"grass": grass_multimesh
+		"grass": _build_multimesh(grass_transforms, GRASS_PLANE_MESH),
+		"tall_grass": _build_multimesh(
+			tall_grass_transforms, TALL_GRASS_PLANE_MESH
+		),
+		"flowers": _build_multimesh(flower_transforms, FLOWER_MESH)
 	}
 
 
@@ -715,79 +724,16 @@ func _get_tile_surface_normal(
 	return normal if normal.y >= 0.0 else -normal
 
 
-func _build_grass_multimesh(
-	transforms: Array[Transform3D], colors: Array[Color]
-) -> MultiMesh:
+func _build_multimesh(transforms: Array[Transform3D], mesh: Mesh) -> MultiMesh:
 	if transforms.is_empty():
 		return null
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_colors = true
-	multimesh.mesh = GRASS_PLANE_MESH
+	multimesh.mesh = mesh
 	multimesh.instance_count = transforms.size()
 	for index in range(transforms.size()):
 		multimesh.set_instance_transform(index, transforms[index])
-		multimesh.set_instance_color(index, colors[index])
 	return multimesh
-
-
-func _get_grass_material() -> ShaderMaterial:
-	if _grass_material:
-		return _grass_material
-	_grass_material = ShaderMaterial.new()
-	_grass_material.shader = GRASS_SHADER
-	_grass_material.set_shader_parameter("match_instance_color", true)
-	_grass_material.set_shader_parameter("albedo_texture", GRASS_TEXTURE)
-	_grass_material.set_shader_parameter("albedo1", Color(0.443137, 0.635294, 0.0))
-	_grass_material.set_shader_parameter("albedo2", Color(0.556863, 0.678431, 0.211765))
-	_grass_material.set_shader_parameter("albedo2_scale", 0.11)
-	_grass_material.set_shader_parameter("albedo2_threshold", 0.537)
-	_grass_material.set_shader_parameter("albedo2_noise", ALBEDO2_NOISE)
-	_grass_material.set_shader_parameter("albedo3", Color(0.501961, 0.654902, 0.223529))
-	_grass_material.set_shader_parameter("albedo3_scale", 0.1)
-	_grass_material.set_shader_parameter("albedo3_threshold", 0.471)
-	_grass_material.set_shader_parameter("albedo3_noise", ALBEDO3_NOISE)
-	_grass_material.set_shader_parameter("accent_frequency1", 0.001)
-	_grass_material.set_shader_parameter("accent_texture1", GRASS_TEXTURE)
-	_grass_material.set_shader_parameter("accent_albedo1", Color(0.603922, 0.717647, 0.0))
-	_grass_material.set_shader_parameter("accent_height1", 0.1)
-	_grass_material.set_shader_parameter("accent_scale1", 1.0)
-	_grass_material.set_shader_parameter("accent_probability2", 0.0001)
-	_grass_material.set_shader_parameter("accent_texture2", ACCENT_GRASS_TEXTURE)
-	_grass_material.set_shader_parameter("accent_albedo2", Color(0.423529, 0.603922, 0.0))
-	_grass_material.set_shader_parameter("accent_height2", 0.185)
-	_grass_material.set_shader_parameter("accent_scale2", 1.0)
-	_grass_material.set_shader_parameter("framerate", 5.0)
-	_grass_material.set_shader_parameter("quantised", true)
-	_grass_material.set_shader_parameter("world_space_sway", true)
-	_grass_material.set_shader_parameter("world_sway_angle", 60.0)
-	_grass_material.set_shader_parameter("fake_perspective_scale", 0.3)
-	_grass_material.set_shader_parameter("wind_noise", WIND_NOISE)
-	_grass_material.set_shader_parameter("wind_noise_threshold", 0.365)
-	_grass_material.set_shader_parameter("wind_noise_scale", 0.071)
-	_grass_material.set_shader_parameter("wind_noise_speed", 0.025)
-	_grass_material.set_shader_parameter("wind_noise_direction", Vector2(0.0, 1.0))
-	_grass_material.set_shader_parameter("noise_diverge_angle", 10.0)
-	_grass_material.set_shader_parameter("view_space_sway", true)
-	_grass_material.set_shader_parameter("view_sway_speed", 0.1)
-	_grass_material.set_shader_parameter("view_sway_angle", 10.0)
-	_grass_material.set_shader_parameter("character_displacement", true)
-	_grass_material.set_shader_parameter("player_displacement_angle_z", 60.0)
-	_grass_material.set_shader_parameter("player_displacement_angle_x", 62.7)
-	_grass_material.set_shader_parameter("radius_exponent", 0.9)
-	_grass_material.set_shader_parameter("cuts", 3)
-	_grass_material.set_shader_parameter("wrap", 0.0)
-	_grass_material.set_shader_parameter("steepness", 1.0)
-	_grass_material.set_shader_parameter("ambient_fill", 0.18)
-	_grass_material.set_shader_parameter("threshold_gradient_size", 0.75)
-	var empty_character_positions: Array[Vector4] = []
-	empty_character_positions.resize(64)
-	for index: int in range(64):
-		empty_character_positions[index] = Vector4.ZERO
-	_grass_material.set_shader_parameter(
-		"character_positions", empty_character_positions
-	)
-	return _grass_material
 
 
 func _get_biome_color(biome: int) -> Color:
@@ -1119,21 +1065,9 @@ func _get_material(biome: int) -> ShaderMaterial:
 
 	var base_color: Color = _get_biome_color(biome)
 	var material := ShaderMaterial.new()
-	material.shader = FLOOR_SHADER
-	material.set_shader_parameter("albedo1", base_color)
-	material.set_shader_parameter("albedo2", base_color)
-	material.set_shader_parameter("albedo2_noise", ALBEDO2_NOISE)
-	material.set_shader_parameter("albedo2_scale", 0.11)
-	material.set_shader_parameter("albedo2_threshold", 0.537)
-	material.set_shader_parameter("albedo3", base_color)
-	material.set_shader_parameter("albedo3_noise", ALBEDO3_NOISE)
-	material.set_shader_parameter("albedo3_scale", 0.1)
-	material.set_shader_parameter("albedo3_threshold", 0.471)
-	material.set_shader_parameter("cuts", 3)
-	material.set_shader_parameter("wrap", 0.0)
-	material.set_shader_parameter("steepness", 1.0)
-	material.set_shader_parameter("ambient_fill", 0.18)
-	material.set_shader_parameter("threshold_gradient_size", 0.75)
+	material.shader = GROUND_SHADER
+	material.set_shader_parameter("ground_color", base_color)
+	material.set_shader_parameter("outline_mask", 1.0)
 	_materials[biome] = material
 	return material
 
