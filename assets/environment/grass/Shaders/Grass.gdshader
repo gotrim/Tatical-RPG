@@ -362,7 +362,7 @@ void fragment() {
 void light() {
 	// Diffuse lighting.
 	float NdotL = dot(NORMAL, LIGHT);
-	float diffuse_amount = NdotL + (ATTENUATION - 1.0) + wrap;
+	float diffuse_amount = NdotL + (max(ATTENUATION, 0.5) - 1.0) + wrap;
 	diffuse_amount *= steepness;
 
 	// CLOUDS
