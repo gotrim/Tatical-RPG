@@ -76,13 +76,11 @@ varying float debug_wind_color;
 varying vec3 debug_interactive_color;
 varying float wind_noise_sample;
 
-varying float instance_id;
 varying float id_seed1;
 varying float id_seed2;
 
 varying vec3 model_origin;
 varying vec3 object_origin;
-varying vec3 world_pos;
 varying vec4 multimesh_color;
 
 varying float player_displacement_fake_perspective;
@@ -133,7 +131,7 @@ mat4 view_space_rotate(float angle) {
 
 void vertex() {
 	multimesh_color = COLOR;
-	instance_id = float(INSTANCE_ID);
+	float instance_id = float(INSTANCE_ID);
 	// Generate random numbers for accent leaves based on instance ID
 	id_seed1 = random(instance_id);
 	id_seed2 = random(instance_id + PI);
@@ -147,8 +145,6 @@ void vertex() {
 		VERTEX.y += accent_height2;
 		VERTEX *= accent_scale2;
 	}
-	// Get vertex world position
-	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// Find origin of each quad of grass in world-space
 	object_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
@@ -200,34 +196,32 @@ void vertex() {
 	float character_displacement_y = 0.0;
 	// Calculate each character_position's influence on rotation, and add the values cumulatively
 	if (character_displacement) {
+		vec2 camera_forward = normalize(CAMERA_DIRECTION_WORLD.xz);
+		vec2 camera_right = normalize(vec2(CAMERA_DIRECTION_WORLD.z, -CAMERA_DIRECTION_WORLD.x));
 		for (int i = 0; i < character_count; i++) {
-			if (character_positions[i].w <= 0.0) {
+			vec4 character = character_positions[i];
+			if (character.w <= 0.0) {
+				// Active characters are packed before the zero-filled tail.
+				break;
+			}
+
+			// Skip square root and power for characters outside the displacement radius.
+			vec3 character_to_grass = object_origin - character.xyz;
+			float distance_squared = dot(character_to_grass, character_to_grass);
+			float radius_squared = character.w * character.w;
+			if (distance_squared >= radius_squared) {
 				continue;
 			}
 
-			// Find distance between grass origin and character and scale radius based on character size value
-			float distance = length(character_positions[i].xyz - object_origin) / character_positions[i].w;
-			// Calculate strength and steepness of displacement
+			float distance = sqrt(distance_squared) / character.w;
 			float displacement_strength = pow(1.0 - distance, radius_exponent);
+			vec2 character_direction = normalize(character_to_grass.xz);
+			float view_y_dot = dot(camera_forward, character_direction);
+			float view_x_dot = dot(camera_right, character_direction);
 
-			// If a character is displacing the grass
-			if (displacement_strength > 0.0) {
-				// Clamp displacement influence
-				displacement_strength = clamp(displacement_strength, 0.0, 1.0);
-
-				// Get direction from character to grass in world space
-				vec3 character_to_grass = object_origin - character_positions[i].xyz;
-
-				// Calculate how much to scale rotation in screen y axis based on alignment to camera's forward vector
-				float view_y_dot = dot(normalize(CAMERA_DIRECTION_WORLD.xz), normalize(character_to_grass.xz)); // -1.0 on top, 1.0 on bottom
-				// Same for x axis but using perpendicular vector
-				vec3 perpendicular_camera_direction_world = vec3(CAMERA_DIRECTION_WORLD.z, 0.0, -CAMERA_DIRECTION_WORLD.x); // 1.0 on right, -1.0 on left
-				float view_x_dot = dot(normalize(perpendicular_camera_direction_world.xz), normalize(character_to_grass.xz));
-
-				// Cumulatively add together influences from each character
-				character_displacement_x += displacement_strength * view_x_dot;
-				character_displacement_y += displacement_strength * view_y_dot;
-			}
+			// Cumulatively add together influences from each character
+			character_displacement_x += displacement_strength * view_x_dot;
+			character_displacement_y += displacement_strength * view_y_dot;
 		}
 	}
 	// Clamp values to stop overrotating
@@ -321,23 +315,30 @@ void fragment() {
 
 	// Sample albedo texture based on above calculation
 	vec4 albedo_tex = texture(albedo_texture, uv);
-	float albedo2_noise_tex = texture(albedo2_noise, object_origin.xz * (albedo2_scale)).r;
-	float albedo3_noise_tex = texture(albedo3_noise, object_origin.xz * (albedo3_scale)).r;
-	ALBEDO = albedo1.rgb * albedo_tex.rgb;
-	if (albedo2_noise_tex > albedo2_threshold) {
-		ALBEDO = albedo2.rgb;
-	} if (albedo3_noise_tex > albedo3_threshold) {
-		ALBEDO = albedo3.rgb;
+	if (!match_instance_color) {
+		float albedo2_noise_tex = texture(albedo2_noise, object_origin.xz * albedo2_scale).r;
+		float albedo3_noise_tex = texture(albedo3_noise, object_origin.xz * albedo3_scale).r;
+		ALBEDO = albedo1.rgb * albedo_tex.rgb;
+		if (albedo2_noise_tex > albedo2_threshold) {
+			ALBEDO = albedo2.rgb;
+		}
+		if (albedo3_noise_tex > albedo3_threshold) {
+			ALBEDO = albedo3.rgb;
+		}
 	}
 	// Accent 1
 	if (id_seed1 < accent_frequency1) {
 		albedo_tex = texture(accent_texture1, uv);
-		ALBEDO = accent_albedo1.rgb * albedo_tex.rgb;
+		if (!match_instance_color) {
+			ALBEDO = accent_albedo1.rgb * albedo_tex.rgb;
+		}
 	}
 	// Accent 2
 	else if (id_seed2 < accent_probability2) {
 		albedo_tex = texture(accent_texture2, uv);
-		ALBEDO = accent_albedo2.rgb * albedo_tex.rgb;
+		if (!match_instance_color) {
+			ALBEDO = accent_albedo2.rgb * albedo_tex.rgb;
+		}
 	}
 	if (match_instance_color) {
 		ALBEDO = multimesh_color.rgb;
